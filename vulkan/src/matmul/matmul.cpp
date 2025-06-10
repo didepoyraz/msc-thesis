@@ -63,11 +63,12 @@ public:
 		uint64_t elapsedTime1 = timestampStart - timestamp1;
 		uint64_t elapsedTime2 = timestampExeEnd - timestampStart;
 		uint64_t elapsedTime3 = timestampEnd - timestampExeEnd;
-		
+		uint64_t totalExecutionTime = timestampEnd - timestamp1;
 		
 		std::cout << "Bufffer setup time = " << elapsedTime1 << " ns" << std::endl;
 		std::cout << "Computation time = " << elapsedTime2 << " ns" << std::endl;
 		std::cout << "Buffer write + GPU->host transfer time = " << elapsedTime3 << " ns" << std::endl;
+		std::cout << "Total Execution time = " << totalExecutionTime << " ns" << std::endl;
 	}
 
 	VkResult createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkBuffer *buffer, VkDeviceMemory *memory, VkDeviceSize size, void *data = nullptr)
@@ -82,7 +83,7 @@ public:
 		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &deviceMemoryProperties);
 		VkMemoryRequirements memReqs;
 		VkMemoryAllocateInfo memAlloc = vks::initializers::memoryAllocateInfo();
-		vkGetBufferMemoryRequirements(device, *buffer, &memReqs);
+		vkGetBufferMemoryRequirements(device, *buffer, &memReqs); // querying vulkan to find out how much memory we need for this buffer
 		
 		std::cout << "Buffer Size: " << memReqs.size / (1024 * 1024) << " MB" << std::endl;
 
@@ -123,7 +124,6 @@ public:
 		appInfo.pEngineName = "VulkanExample";
 		appInfo.apiVersion = VK_API_VERSION_1_0;
 
-
 		/*
 			Vulkan instance creation (without surface extensions)
 		*/
@@ -150,6 +150,10 @@ public:
 		VK_CHECK_RESULT(vkEnumeratePhysicalDevices(instance, &deviceCount, physicalDevices.data()));
 		physicalDevice = physicalDevices[0];
 
+		VkPhysicalDeviceFeatures features;
+		vkGetPhysicalDeviceFeatures(physicalDevice, &features);
+		std::cout << "shaderInt64: " << features.shaderInt64 << std::endl;
+
 		VkPhysicalDeviceProperties deviceProperties;
 		vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
 		LOG("GPU: %s\n", deviceProperties.deviceName);
@@ -160,9 +164,11 @@ public:
 		uint32_t queueFamilyCount;
 		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 		std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyCount);
-		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilyProperties.data());
+		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilyProperties.data()); // Fills in the queueFamilyProperties vector with actual data. Each item describes what capabilities the queue family supports (graphics, compute, transfer).
+	
 		for (uint32_t i = 0; i < static_cast<uint32_t>(queueFamilyProperties.size()); i++) {
-			if (queueFamilyProperties[i].queueFlags & VK_QUEUE_COMPUTE_BIT) {
+
+			if (queueFamilyProperties[i].queueFlags & VK_QUEUE_COMPUTE_BIT) { // Checks if this queue family supports compute operations (for running compute shaders).
 				queueFamilyIndex = i;
 				queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 				queueCreateInfo.queueFamilyIndex = i;
@@ -171,7 +177,6 @@ public:
 				break;
 			}
 		}
-
 
 		// Create logical device
 		VkDeviceCreateInfo deviceCreateInfo = {};
@@ -232,7 +237,7 @@ public:
 			// for matrix A
             createBuffer(
 				VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, // memory accessible from the CPU to be able to transfer to and fro the CPU.
 				&hostBufferA,
 				&hostMemoryA,
 				bufferSize,
@@ -277,8 +282,8 @@ public:
 
 			// device-local buffer for matrix A
             createBuffer(
-                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, // First bit makes the buffer bindable as a storage buffer in the compute shader, so it can be read/written from the shader (layout(binding = ...) buffer { ... };). Second bit allows copying data into it from the host-visible staging buffer
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, // not accesible from the CPU
                 &deviceBufferA, &deviceMemoryA, bufferSize);
 
             // Create device-local buffer for matrix B
@@ -314,7 +319,7 @@ public:
 			submitInfo.pCommandBuffers = &copyCmd;
 			VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
 			VkFence fence;
-			VK_CHECK_RESULT(vkCreateFence(device, &fenceInfo, nullptr, &fence));
+			VK_CHECK_RESULT(vkCreateFence(device, &fenceInfo, nullptr, &fence)); 
 
 			// Submit to the queue
 			VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence));
@@ -421,7 +426,10 @@ public:
 		{
 			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 
+		
 			VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &cmdBufInfo));
+
+			vkCmdResetQueryPool(commandBuffer, queryPool, 0, 4);
 
 			vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPool, 0);
 
@@ -548,7 +556,7 @@ public:
 
 		queryTimestamps();
 
-		// Output buffer contents
+	   // Output buffer contents
 		// LOG("Matrix A:\n");
 		// for (auto v : Input_MatrixA) {
 		// 	LOG("%d \t", v);
@@ -565,7 +573,24 @@ public:
 		// for (auto v : Output_Matrix) {
 		// 	LOG("%d \t", v);
 		// }
-		// std::cout << std::endl;
+		int cols = 128;  // set this to your actual matrix width
+
+		// LOG("First row of matrix A:\n");
+		// for (int i = 0; i < cols; ++i) {
+		// 	LOG("%d \t", Input_MatrixA[i]);
+		// }
+		// LOG("First row of matrix B:\n");
+		// for (int i = 0; i < cols; ++i) {
+		// 	LOG("%d \t", Input_MatrixB[i]);
+		// }
+		LOG("%d \t", Output_Matrix[0]);
+		LOG("First row of output matrix:\n");
+		for (int i = 0; i < cols; ++i) {
+			LOG("%d \t", Output_Matrix[i]);
+		}
+	
+
+		std::cout << std::endl;
 
 		// Clean up
 		vkDestroyBuffer(device, deviceBufferA, nullptr);
@@ -608,7 +633,7 @@ int main(int argc, char* argv[]) {
     }
 
 	std::cout << "Using N = " << N << std::endl;
-	
+
 	// commandLineParser.add("shaders", { "-s", "--shaders" }, 1, "Select shader type to use (glsl or hlsl)");
 	// commandLineParser.parse(argc, argv);
 

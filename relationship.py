@@ -7,18 +7,17 @@ class unit(Enum):
     US = 2
     MS = 3
 
-UNIT = unit.US 
+UNIT = unit.NS
 
-# N, computation time
+# N, computation time 1024x1024 for different tile sizes
 data = [
-    (16, 656), # us
-    (32, 610),
-    (64, 700),
-    (128, 1709),
-    (256, 9502),
-    (512, 71753),
-    (768, 240545),
-    (1024, 570007)
+    (16, 1439983252), # us
+    (32, 361202800),
+    (64, 90801818),
+    (128, 23421716),
+    (256, 6500857),
+    (512, 2247916),
+    (1024, 1209708)
 ]
 
 for i in range(len(data)):
@@ -35,7 +34,7 @@ print(N_values)
 print(computation_time)
 
 ###### aN^3 + bN^2 + cN + d ######
-coefficients = np.polyfit(N_values, computation_time, 3)
+coefficients = np.polyfit(N_values, computation_time, 2)
 model = np.poly1d(coefficients)
 
 N_predict = np.linspace(min(N_values), max(N_values), 100)
@@ -51,20 +50,22 @@ print(f"Cubic Model Coefficients: {coefficients}")
 # N_predict = np.linspace(16, 1024, 100)
 # computation_time_predict = C * (N_predict ** 3)
 
-
+plt.clf()
 # Plot actual data and the cubit fit
 plt.scatter(N_values, computation_time, color='red', label="Actual Time")
 # plt.plot(N_predict, computation_time_predict, label=f"Fitted: C = {C:.6f}", color='blue')
-plt.plot(N_predict, computation_time_predict, label=f"Fitted Time", color='blue')
 
-plt.xlabel('N')
+# plt.plot(N_predict, computation_time_predict, label=f"Fitted Time", color='blue')
+
+plt.xlabel('Tile Size')
 # unit_label = {
 #     unit.NS: "Computation Time (ns)",
 #     unit.US: "Computation Time (μs)",
 #     unit.MS: "Computation Time (ms)"
 # }[UNIT]
+plt.title("1024x1024 Matrix with Varying Tile Sizes")
 plt.ylabel("Computation Time(ms)")
 plt.legend()
 plt.grid(True)
-plt.savefig('./relationship.png')
+plt.savefig('./relationship_to_tiles_vulkan.png')
 

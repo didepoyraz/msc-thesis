@@ -216,18 +216,18 @@ public:
 			Prepare storage buffers
 		*/
 		// matrix A
-		std::vector<uint32_t> Input_MatrixA(N * N);
+		std::vector<float> Input_MatrixA(N * N);
 		// matrix B
-		std::vector<uint32_t> Input_MatrixB(N * N);
+		std::vector<float> Input_MatrixB(N * N);
 		// output matrix
-		std::vector<uint32_t> Output_Matrix(N * N);
+		std::vector<float> Output_Matrix(N * N);
 
 		// fill input data
 		uint32_t n = 0;
 		std::generate(Input_MatrixA.begin(), Input_MatrixA.end(), [&n] { return n++; });
         std::generate(Input_MatrixB.begin(), Input_MatrixB.end(), [&n] { return n++; });
 
-		const VkDeviceSize bufferSize = N * N * sizeof(uint32_t);
+		const VkDeviceSize bufferSize = N * N * sizeof(float);
 
 		VkBuffer deviceBufferA, hostBufferA, deviceBufferB, hostBufferB, deviceBufferC, hostBufferC;
 		VkDeviceMemory deviceMemoryA, hostMemoryA, deviceMemoryB, hostMemoryB, deviceMemoryC, hostMemoryC;
@@ -386,9 +386,17 @@ public:
 			// Pass SSBO size via specialization constant
 			struct SpecializationData {
 				uint32_t MATRIX_SIZE = N;
+				uint32_t TILE_X = TILE;
+				uint32_t TILE_Y = TILE;
 			} specializationData;
-			VkSpecializationMapEntry specializationMapEntry = vks::initializers::specializationMapEntry(0, 0, sizeof(uint32_t));
-			VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(1, &specializationMapEntry, sizeof(SpecializationData), &specializationData);
+
+			std::vector<VkSpecializationMapEntry> specializationMapEntries = {
+				{vks::initializers::specializationMapEntry(0, offsetof(SpecializationData, MATRIX_SIZE), sizeof(uint32_t))},
+				{vks::initializers::specializationMapEntry(1,offsetof(SpecializationData, TILE_X), sizeof(uint32_t))},
+				{vks::initializers::specializationMapEntry(2, offsetof(SpecializationData, TILE_Y), sizeof(uint32_t))},
+			};
+				VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(
+				3, specializationMapEntries.data(), sizeof(SpecializationData), &specializationData);
 
 			std::string shaderDir = "glsl";
 			if (commandLineParser.isSet("shaders")) {
@@ -557,38 +565,21 @@ public:
 		queryTimestamps();
 
 	   // Output buffer contents
-		// LOG("Matrix A:\n");
-		// for (auto v : Input_MatrixA) {
-		// 	LOG("%d \t", v);
-		// }
-		// std::cout << std::endl;
-        
-        // LOG("Matrix B:\n");
-		// for (auto v : Input_MatrixB) {
-		// 	LOG("%d \t", v);
-		// }
-		// std::cout << std::endl;
-
-		// LOG("Output matrix:\n");
-		// for (auto v : Output_Matrix) {
-		// 	LOG("%d \t", v);
-		// }
-		int cols = 128;  // set this to your actual matrix width
+		int cols = 1024;  
 
 		// LOG("First row of matrix A:\n");
 		// for (int i = 0; i < cols; ++i) {
-		// 	LOG("%d \t", Input_MatrixA[i]);
+		// 	LOG("%f \t", Input_MatrixA[i]);
 		// }
 		// LOG("First row of matrix B:\n");
 		// for (int i = 0; i < cols; ++i) {
-		// 	LOG("%d \t", Input_MatrixB[i]);
+		// 	LOG("%f \t", Input_MatrixB[i]);
 		// }
-		LOG("%d \t", Output_Matrix[0]);
+		LOG("%f \t", Output_Matrix[0]);
 		LOG("First row of output matrix:\n");
 		for (int i = 0; i < cols; ++i) {
-			LOG("%d \t", Output_Matrix[i]);
+			LOG("%f \t", Output_Matrix[i]);
 		}
-	
 
 		std::cout << std::endl;
 

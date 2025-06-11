@@ -575,13 +575,13 @@ public:
 		// for (int i = 0; i < cols; ++i) {
 		// 	LOG("%f \t", Input_MatrixB[i]);
 		// }
-		LOG("%f \t", Output_Matrix[0]);
-		LOG("First row of output matrix:\n");
-		for (int i = 0; i < cols; ++i) {
-			LOG("%f \t", Output_Matrix[i]);
-		}
+		// LOG("%f \t", Output_Matrix[0]);
+		// LOG("First row of output matrix:\n");
+		// for (int i = 0; i < cols; ++i) {
+		// 	LOG("%f \t", Output_Matrix[i]);
+		// }
 
-		std::cout << std::endl;
+		// std::cout << std::endl;
 
 		// Clean up
 		vkDestroyBuffer(device, deviceBufferA, nullptr);

@@ -1,4 +1,3 @@
-//original version of shader
 #version 450
 
 layout(set = 0, binding = 0) buffer MatrixA {
@@ -17,24 +16,60 @@ layout(binding = 2) buffer MatrixC {
 layout (local_size_x_id = 1, local_size_y_id = 2, local_size_z = 1) in;
 
 layout (constant_id = 0) const uint MATRIX_SIZE = 1024;
+layout (constant_id = 1) const uint TILE_SIZE = 16; 
 
-float matmul(uint x, uint y){
-	float result = 0.0;
-	for (uint i = 0; i < MATRIX_SIZE; i++) {
-		result += (dataA[x * MATRIX_SIZE + i] * dataB[i * MATRIX_SIZE + y]); 
-	}
-	return result;
-}
+shared float tileA[TILE_SIZE][TILE_SIZE];
+shared float tileB[TILE_SIZE][TILE_SIZE];
 
-void main() 
-{	
-	uint x = gl_GlobalInvocationID.x;
-    uint y = gl_GlobalInvocationID.y;
+void main() {
+    // global position in the matrix
+    uint row = gl_GlobalInvocationID.y;
+    uint col = gl_GlobalInvocationID.x;
 
-    if (x >= MATRIX_SIZE || y >= MATRIX_SIZE) 
+    // local position within the workgroup
+    uint localRow = gl_LocalInvocationID.y;
+    uint localCol = gl_LocalInvocationID.x;
+
+    // Bounds check
+    if (row >= MATRIX_SIZE || col >= MATRIX_SIZE) {
         return;
+    }
 
-    float result = matmul(x, y);
+    float result = 0;
 
-    output_dataC[x * MATRIX_SIZE + y] = result;
+    // Loop over tiles horizontally and k increases by TILE_SIZE so that each thread only accesses it's own relative position within different tiles
+    for (uint k = 0; k < MATRIX_SIZE/TILE_SIZE; k += 1) {
+
+        // Each thread loads one element into the tile from A and B per iteration and MATRIX_SIZE/TILE_SIZE 
+        // positions per tileA and tileB in total
+
+        // tileA gets the row-wise elements from dataA and tileB gets the column-wise elements. For a thread, loop iterations
+        // will have it shifted to different row positions of the partial dot product of the dataA (according to tiles) for 
+        // tileA and different column positions of the partial dot product for dataB for tileB
+        //---------------------------------------------------------------------------------------------------------------------//
+        // For a given tile (k-th tile in the inner dimension),
+         // each thread loads:
+         // - One value from A: in the same row, shifting across columns (k + localCol)
+         // - One value from B: in the same column, shifting across rows (k + localRow)
+
+         // tileA stores a horizontal slice (row-major) of A
+         // tileB stores a vertical slice (column-major) of B
+
+        tileA[localRow][localCol] = dataA[row * MATRIX_SIZE + (k*TILE_SIZE + localCol)];  
+        tileB[localRow][localCol] = dataB[( k*TILE_SIZE + localRow) * MATRIX_SIZE + col];
+
+        // Synchronize all threads in the workgroup for the tile to be completed
+        barrier();
+
+        // Compute partial dot product for this tile
+        for (uint t = 0; t < TILE_SIZE; t++) {
+            result += tileA[localRow][t] * tileB[t][localCol];
+        }
+
+        // Wait for all threads before loading the next tile
+        barrier();
+    }
+
+    // Store the full result in the output matrix, each thread saves its own respective result
+    output_dataC[row * MATRIX_SIZE + col] = result;
 }

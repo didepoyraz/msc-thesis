@@ -77,6 +77,7 @@ public:
 		VkBufferCreateInfo bufferCreateInfo = vks::initializers::bufferCreateInfo(usageFlags, size);
 		bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, nullptr, buffer));
+		
 
 		// Create the memory backing up the buffer handle
 		VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
@@ -157,6 +158,12 @@ public:
 		VkPhysicalDeviceProperties deviceProperties;
 		vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
 		LOG("GPU: %s\n", deviceProperties.deviceName);
+		LOG("Max shared memory per workgroup: {%d} bytes\n", deviceProperties.limits.maxComputeSharedMemorySize);
+		LOG("Max threads per workgroup: {%d}\n", deviceProperties.limits.maxComputeWorkGroupInvocations);
+		LOG("Max workgroup size: {%d} x {%d} x {%d}\n",
+         deviceProperties.limits.maxComputeWorkGroupSize[0],
+         deviceProperties.limits.maxComputeWorkGroupSize[1],
+         deviceProperties.limits.maxComputeWorkGroupSize[2]);
 
 		// Request a single compute queue
 		const float defaultQueuePriority(0.0f);
@@ -564,7 +571,7 @@ public:
 
 		queryTimestamps();
 
-	   // Output buffer contents
+	//    Output buffer contents
 		int cols = 1024;  
 
 		// LOG("First row of matrix A:\n");
@@ -575,7 +582,8 @@ public:
 		// for (int i = 0; i < cols; ++i) {
 		// 	LOG("%f \t", Input_MatrixB[i]);
 		// }
-		// LOG("%f \t", Output_Matrix[0]);
+
+		LOG("%f \t", Output_Matrix[0]);
 		// LOG("First row of output matrix:\n");
 		// for (int i = 0; i < cols; ++i) {
 		// 	LOG("%f \t", Output_Matrix[i]);
@@ -628,9 +636,10 @@ int main(int argc, char* argv[]) {
 	// commandLineParser.add("shaders", { "-s", "--shaders" }, 1, "Select shader type to use (glsl or hlsl)");
 	// commandLineParser.parse(argc, argv);
 
-	int threadsPerGroup = 1; //current thread group's local size is x=y=1
+	int threadsPerGroup = TILE*TILE; //current thread group's local size is x=y=1
 	int totalThreads = (N * N);
-	std::cout << "Threads per group is " << threadsPerGroup << "; Total thread groups is " << totalThreads << std::endl;
+	int totalThreadGroups = totalThreads / threadsPerGroup;
+	std::cout << "Threads per group is " << threadsPerGroup << "; Total thread groups " << totalThreadGroups << "; Total threads is " << totalThreads << std::endl;
 
 	VulkanExample *vulkanExample = new VulkanExample();
 	std::cout << "Finished. Press enter to terminate...";

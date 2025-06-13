@@ -38,7 +38,7 @@ void main() {
     float result = 0;
 
     // Loop over tiles horizontally and k increases by TILE_SIZE so that each thread only accesses it's own relative position within different tiles
-    for (uint k = 0; k < MATRIX_SIZE/TILE_SIZE; k += 1) {
+    for (uint k = 0; k < MATRIX_SIZE; k += TILE_SIZE) {
 
         // Each thread loads one element into the tile from A and B per iteration and MATRIX_SIZE/TILE_SIZE 
         // positions per tileA and tileB in total
@@ -55,8 +55,8 @@ void main() {
          // tileA stores a horizontal slice (row-major) of A
          // tileB stores a vertical slice (column-major) of B
 
-        tileA[localRow][localCol] = dataA[row * MATRIX_SIZE + (k*TILE_SIZE + localCol)];  
-        tileB[localRow][localCol] = dataB[( k*TILE_SIZE + localRow) * MATRIX_SIZE + col];
+        tileA[localRow][localCol] = dataA[row * MATRIX_SIZE + (k + localCol)];  
+        tileB[localRow][localCol] = dataB[( k + localRow) * MATRIX_SIZE + col];
 
         // Synchronize all threads in the workgroup for the tile to be completed
         barrier();

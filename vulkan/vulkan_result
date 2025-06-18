@@ -1,0 +1,24 @@
+N = 2048
+Bufffer setup time = 2981 ns
+Computation time = 4659946243 ns
+Buffer write + GPU->host transfer time = 4282474 ns
+Total Execution time = 4664231698 ns
+
+N = 2048
+Bufffer setup time = 3167 ns
+Computation time = 4656181869 ns
+Buffer write + GPU->host transfer time = 4237066 ns
+Total Execution time = 4660422102 ns
+
+N = 2048
+Bufffer setup time = 2519 ns
+Computation time = 4663311294 ns
+Buffer write + GPU->host transfer time = 4297714 ns
+Total Execution time = 4667611527 ns
+
+N = 2048
+Bufffer setup time = 2870 ns
+Computation time = 4603577372 ns
+Buffer write + GPU->host transfer time = 4220252 ns
+Total Execution time = 4607800494 ns
+

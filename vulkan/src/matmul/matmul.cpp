@@ -226,6 +226,11 @@ public:
 		std::vector<float> Input_MatrixA(N * N);
 		// matrix B
 		std::vector<float> Input_MatrixB(N * N);
+		
+		// Interleaved version of matrixA and matrixB
+		// std::vector<float> Input_MatrixInt( 2 * N * N * N );
+		std::vector<float> Input_MatrixInt;
+
 		// output matrix
 		std::vector<float> Output_Matrix(N * N);
 
@@ -234,10 +239,27 @@ public:
 		std::generate(Input_MatrixA.begin(), Input_MatrixA.end(), [&n] { return n++; });
         std::generate(Input_MatrixB.begin(), Input_MatrixB.end(), [&n] { return n++; });
 
-		const VkDeviceSize bufferSize = N * N * sizeof(float);
+		// Generate the interleaved data layout for MatrixInt
+		for(int i = 0; i < N; i++){ // row of matrixA
+			for(int j = 0; j < N; j++){ //column of matrixB
+				for(int k = 0; k < N; k++){ // walk along A’s row, B’s column
+					Input_MatrixInt.push_back(Input_MatrixA[i*N + k]);
+					Input_MatrixInt.push_back(Input_MatrixB[k*N + j]);
+				}
+			}
+		}
 
-		VkBuffer deviceBufferA, hostBufferA, deviceBufferB, hostBufferB, deviceBufferC, hostBufferC;
-		VkDeviceMemory deviceMemoryA, hostMemoryA, deviceMemoryB, hostMemoryB, deviceMemoryC, hostMemoryC;
+		// std::cout << "Interleaved matrix: ";
+		// for (const auto& val : Input_MatrixInt) {
+		// 	std::cout << val << " ";
+		// }
+		// std::cout << std::endl;
+
+		const VkDeviceSize bufferSize = N * N * sizeof(float);
+		const VkDeviceSize interleavedBufferSize = 2 * N * N * N * sizeof(float);
+
+		VkBuffer deviceBufferA, hostBufferA, deviceBufferB, hostBufferB, deviceBufferInt, hostBufferInt, deviceBufferC, hostBufferC;
+		VkDeviceMemory deviceMemoryA, hostMemoryA, deviceMemoryB, hostMemoryB, deviceMemoryInt, hostMemoryInt, deviceMemoryC, hostMemoryC;
 
 		// Copy input data to GPU mem using staging buffer 
 		{
@@ -258,6 +280,15 @@ public:
 				&hostMemoryB,
 				bufferSize,
 				Input_MatrixB.data());
+			
+			// for matrix Interleaved
+            createBuffer(
+				VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+				&hostBufferInt,
+				&hostMemoryInt,
+				bufferSize,
+				Input_MatrixInt.data());
 			
 			// for matrix C, no data initialized, or can be initialized with 0...
             createBuffer(
@@ -286,6 +317,14 @@ public:
 			mappedRange.size = VK_WHOLE_SIZE;
 			vkFlushMappedMemoryRanges(device, 1, &mappedRange);
 			vkUnmapMemory(device, hostMemoryB);
+
+            vkMapMemory(device, hostMemoryInt, 0, VK_WHOLE_SIZE, 0, &mapped);
+			mappedRange = vks::initializers::mappedMemoryRange();
+			mappedRange.memory = hostMemoryInt;
+			mappedRange.offset = 0;
+			mappedRange.size = VK_WHOLE_SIZE;
+			vkFlushMappedMemoryRanges(device, 1, &mappedRange);
+			vkUnmapMemory(device, hostMemoryInt);
 
 			// device-local buffer for matrix A
             createBuffer(

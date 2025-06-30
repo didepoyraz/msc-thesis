@@ -8,7 +8,11 @@ layout(binding = 1) buffer MatrixB {
    float dataB[];
 };
 
-layout(binding = 2) buffer MatrixC {
+layout(binding = 2) buffer MatrixInt {
+   float dataInt[];
+};
+
+layout(binding = 3) buffer MatrixC {
    float output_dataC[];
 };
 
@@ -38,36 +42,12 @@ void main() {
     float result = 0;
 
     // Loop over tiles horizontally and k increases by TILE_SIZE so that each thread only accesses it's own relative position within different tiles
-    for (uint k = 0; k < MATRIX_SIZE; k += TILE_SIZE) {
 
-        // Each thread loads one element into the tile from A and B per iteration and MATRIX_SIZE/TILE_SIZE 
-        // positions per tileA and tileB in total
-
-        // tileA gets the row-wise elements from dataA and tileB gets the column-wise elements. For a thread, loop iterations
-        // will have it shifted to different row positions of the partial dot product of the dataA (according to tiles) for 
-        // tileA and different column positions of the partial dot product for dataB for tileB
-        //---------------------------------------------------------------------------------------------------------------------//
-        // For a given tile (k-th tile in the inner dimension),
-         // each thread loads:
-         // - One value from A: in the same row, shifting across columns (k + localCol)
-         // - One value from B: in the same column, shifting across rows (k + localRow)
-
-         // tileA stores a horizontal slice (row-major) of A
-         // tileB stores a vertical slice (column-major) of B
-
-        tileA[localRow][localCol] = dataA[row * MATRIX_SIZE + (k + localCol)];  
-        tileB[localRow][localCol] = dataB[( k + localRow) * MATRIX_SIZE + col];
-
-        // Synchronize all threads in the workgroup for the tile to be completed
-        barrier();
-
-        // Compute partial dot product for this tile
-        for (uint t = 0; t < TILE_SIZE; t++) {
-            result += tileA[localRow][t] * tileB[t][localCol];
-        }
-
-        // Wait for all threads before loading the next tile
-        barrier();
+    uint index = row * MATRIX_SIZE + col;
+    uint threadCoord = index * (2*MATRIX_SIZE);
+    // Compute partial dot product for this tile
+    for (uint t = 0; t < 2*MATRIX_SIZE ; t += 2) { //did not validate this yet
+        result += dataInt[t + threadCoord] * dataInt[t + 1 + threadCoord];
     }
 
     // Store the full result in the output matrix, each thread saves its own respective result

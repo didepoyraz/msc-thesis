@@ -287,7 +287,7 @@ public:
 				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
 				&hostBufferInt,
 				&hostMemoryInt,
-				bufferSize,
+				interleavedBufferSize,
 				Input_MatrixInt.data());
 			
 			// for matrix C, no data initialized, or can be initialized with 0...
@@ -338,6 +338,12 @@ public:
                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                 &deviceBufferB, &deviceMemoryB, bufferSize);
 			
+			// Create device-local buffer for matrix Interleaved
+			createBuffer(
+				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+				&deviceBufferInt, &deviceMemoryInt, interleavedBufferSize);
+
 			// device-local buffer for matrix C
 			createBuffer(
 				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -353,10 +359,13 @@ public:
 
 			VkBufferCopy copyRegionA = {};
             VkBufferCopy copyRegionB = {};
+			VkBufferCopy copyRegionInt = {};
 			copyRegionA.size = bufferSize;
             copyRegionB.size = bufferSize;
+			copyRegionInt.size = interleavedBufferSize;
 			vkCmdCopyBuffer(copyCmd, hostBufferA, deviceBufferA, 1, &copyRegionA);
             vkCmdCopyBuffer(copyCmd, hostBufferB, deviceBufferB, 1, &copyRegionB);
+			vkCmdCopyBuffer(copyCmd, hostBufferInt, deviceBufferInt, 1, &copyRegionInt);
 			
             VK_CHECK_RESULT(vkEndCommandBuffer(copyCmd));
 
@@ -381,7 +390,7 @@ public:
 		{
             // 2 storage buffers for input + 1 for output
 			std::vector<VkDescriptorPoolSize> poolSizes = {
-				vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3),
+				vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4), // changed this to 4 for the addition of interleaved matrix
 			};
 
 			VkDescriptorPoolCreateInfo descriptorPoolInfo =
@@ -391,7 +400,8 @@ public:
 			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
 				vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0), // binding 0
                 vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 1), // binding 1
-				vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 2), // binding 2 for Matrix C
+				vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 2), // binding 2 for interleaved
+				vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 3), // binding 3 for Matrix C
 			};
 			VkDescriptorSetLayoutCreateInfo descriptorLayout =
 				vks::initializers::descriptorSetLayoutCreateInfo(setLayoutBindings);
@@ -409,6 +419,7 @@ public:
 			//VkDescriptorBufferInfo bufferDescriptor = { deviceBuffer, 0, VK_WHOLE_SIZE };
 			VkDescriptorBufferInfo bufferDescriptorA = { deviceBufferA, 0, VK_WHOLE_SIZE };
             VkDescriptorBufferInfo bufferDescriptorB = { deviceBufferB, 0, VK_WHOLE_SIZE };
+			VkDescriptorBufferInfo bufferDescriptorInt = { deviceBufferInt, 0, VK_WHOLE_SIZE };
 			VkDescriptorBufferInfo bufferDescriptorC = { deviceBufferC, 0, VK_WHOLE_SIZE };  // for output matrix
 
             // std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets = {
@@ -418,7 +429,8 @@ public:
             std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets = {
                 vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0, &bufferDescriptorA), // binding 0
                 vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, &bufferDescriptorB), // binding 1
-				vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2, &bufferDescriptorC), // binding 2
+				vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2, &bufferDescriptorInt), // binding 2
+				vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3, &bufferDescriptorC), // binding 2
 			};
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(computeWriteDescriptorSets.size()), computeWriteDescriptorSets.data(), 0, NULL);
 
@@ -491,9 +503,10 @@ public:
 			// VkBufferMemoryBarrier bufferBarrier = vks::initializers::bufferMemoryBarrier();
 			// Barrier to ensure that input buffers' transfer is finished before compute shader reads from them
             // update to 2 barriers for matrix A & matrix B
-            VkBufferMemoryBarrier bufferBarriers[2] = {
+            VkBufferMemoryBarrier bufferBarriers[3] = {
                 vks::initializers::bufferMemoryBarrier(),
                 vks::initializers::bufferMemoryBarrier(),
+				vks::initializers::bufferMemoryBarrier()
             };
 
             // 1st barrier for deviceBufferA
@@ -511,13 +524,21 @@ public:
             bufferBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
             bufferBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 
+			// 3rd for deviceBufferInt
+            bufferBarriers[2].buffer = deviceBufferInt;
+            bufferBarriers[2].size = VK_WHOLE_SIZE;
+            bufferBarriers[2].srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+            bufferBarriers[2].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            bufferBarriers[2].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            bufferBarriers[2].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
 			vkCmdPipelineBarrier(
 				commandBuffer,
 				VK_PIPELINE_STAGE_HOST_BIT,
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
 				VK_FLAGS_NONE,
 				0, nullptr,
-				2, bufferBarriers,
+				3, bufferBarriers,
 				0, nullptr);
 
             
@@ -611,34 +632,47 @@ public:
 		queryTimestamps();
 
 	//    Output buffer contents
-		int cols = 1024;  
+		int cols = 4;  
 
-		// LOG("First row of matrix A:\n");
+		LOG("First row of matrix A:\n");
+
 		// for (int i = 0; i < cols; ++i) {
 		// 	LOG("%f \t", Input_MatrixA[i]);
 		// }
+		
+
 		// LOG("First row of matrix B:\n");
+		
 		// for (int i = 0; i < cols; ++i) {
-		// 	LOG("%f \t", Input_MatrixB[i]);
+		// LOG("%f \t", Input_MatrixB[i]);
 		// }
+		
+		
 
 		LOG("%f \t", Output_Matrix[0]);
-		// LOG("First row of output matrix:\n");
-		// for (int i = 0; i < cols; ++i) {
-		// 	LOG("%f \t", Output_Matrix[i]);
-		// }
+		LOG("First row of output matrix:\n");
+		for (int i = 0; i < 16; ++i) {
+			LOG("%f \t", Output_Matrix[i]);
+		}
 
-		// std::cout << std::endl;
+		std::cout << std::endl;
 
 		// Clean up
 		vkDestroyBuffer(device, deviceBufferA, nullptr);
 		vkFreeMemory(device, deviceMemoryA, nullptr);
 		vkDestroyBuffer(device, hostBufferA, nullptr);
 		vkFreeMemory(device, hostMemoryA, nullptr);
+		
         vkDestroyBuffer(device, deviceBufferB, nullptr);
 		vkFreeMemory(device, deviceMemoryB, nullptr);
 		vkDestroyBuffer(device, hostBufferB, nullptr);
 		vkFreeMemory(device, hostMemoryB, nullptr);
+
+		vkDestroyBuffer(device, deviceBufferInt, nullptr);
+		vkFreeMemory(device, deviceMemoryInt, nullptr);
+		vkDestroyBuffer(device, hostBufferInt, nullptr);
+		vkFreeMemory(device, hostMemoryInt, nullptr);
+		
 	}
 
 	~VulkanExample()

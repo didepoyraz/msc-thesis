@@ -230,6 +230,7 @@ public:
 		// Interleaved version of matrixA and matrixB
 		// std::vector<float> Input_MatrixInt( 2 * N * N * N );
 		std::vector<float> Input_MatrixInt;
+		std::vector<float> Col_Major_B;
 
 		// output matrix
 		std::vector<float> Output_Matrix(N * N);
@@ -239,24 +240,35 @@ public:
 		std::generate(Input_MatrixA.begin(), Input_MatrixA.end(), [&n] { return n++; });
         std::generate(Input_MatrixB.begin(), Input_MatrixB.end(), [&n] { return n++; });
 
-		// Generate the interleaved data layout for MatrixInt
-		for(int i = 0; i < N; i++){ // row of matrixA
-			for(int j = 0; j < N; j++){ //column of matrixB
-				for(int k = 0; k < N; k++){ // walk along A’s row, B’s column
-					Input_MatrixInt.push_back(Input_MatrixA[i*N + k]);
-					Input_MatrixInt.push_back(Input_MatrixB[k*N + j]);
-				}
+		// make matrix B col major for easy memory access
+		for (int col = 0; col < N; ++col) {
+			for (int row = 0; row < N; ++row) {
+				Col_Major_B.push_back(Input_MatrixB[row * N + col]);
 			}
 		}
 
-		// std::cout << "Interleaved matrix: ";
-		// for (const auto& val : Input_MatrixInt) {
-		// 	std::cout << val << " ";
+		// LOG("col major bmatrix:\n");
+		// for (int i = 0; i < 9; ++i) {
+		// 	LOG("%f \t", Col_Major_B[i]);
+		// }
+		// std::cout << std::endl;
+
+		// Generate the interleaved data layout for MatrixInt
+		for (int row = 0; row < N; ++row) {
+			for (int col = 0; col < N; ++col) {
+				Input_MatrixInt.push_back(Input_MatrixA[row*N + col]);
+				Input_MatrixInt.push_back(Col_Major_B[row*N + col]);
+			}
+		}
+
+		// LOG("interleaved matrix:\n");
+		// for (int i = 0; i < 18; ++i) {
+		// 	LOG("%f \t", Input_MatrixInt[i]);
 		// }
 		// std::cout << std::endl;
 
 		const VkDeviceSize bufferSize = N * N * sizeof(float);
-		const VkDeviceSize interleavedBufferSize = 2 * N * N * N * sizeof(float);
+		const VkDeviceSize interleavedBufferSize = 2 * N * N * sizeof(float);
 
 		VkBuffer deviceBufferA, hostBufferA, deviceBufferB, hostBufferB, deviceBufferInt, hostBufferInt, deviceBufferC, hostBufferC;
 		VkDeviceMemory deviceMemoryA, hostMemoryA, deviceMemoryB, hostMemoryB, deviceMemoryInt, hostMemoryInt, deviceMemoryC, hostMemoryC;

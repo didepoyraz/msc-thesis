@@ -648,20 +648,20 @@ public:
 
 		LOG("First row of matrix A:\n");
 
-		// for (int i = 0; i < cols; ++i) {
-		// 	LOG("%f \t", Input_MatrixA[i]);
-		// }
+		for (int i = 0; i < cols; ++i) {
+			LOG("%f \t", Input_MatrixA[i]);
+		}
 		
 
-		// LOG("First row of matrix B:\n");
+		LOG("First row of matrix B:\n");
 		
-		// for (int i = 0; i < cols; ++i) {
-		// LOG("%f \t", Input_MatrixB[i]);
-		// }
+		for (int i = 0; i < cols; ++i) {
+		LOG("%f \t", Input_MatrixB[i]);
+		}
 		
 		
 
-		LOG("%f \t", Output_Matrix[0]);
+		// LOG("%f \t", Output_Matrix[0]);
 		LOG("First row of output matrix:\n");
 		for (int i = 0; i < 16; ++i) {
 			LOG("%f \t", Output_Matrix[i]);

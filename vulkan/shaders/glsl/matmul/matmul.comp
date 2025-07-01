@@ -26,30 +26,32 @@ shared float tileA[TILE_SIZE][TILE_SIZE];
 shared float tileB[TILE_SIZE][TILE_SIZE];
 
 void main() {
-    // global position in the matrix
-    uint row = gl_GlobalInvocationID.y;
-    uint col = gl_GlobalInvocationID.x;
+   uint row = gl_GlobalInvocationID.y;
+   uint col = gl_GlobalInvocationID.x;
 
-    // local position within the workgroup
-    uint localRow = gl_LocalInvocationID.y;
-    uint localCol = gl_LocalInvocationID.x;
+   uint localRow = gl_LocalInvocationID.y;
+   uint localCol = gl_LocalInvocationID.x;
 
-    // Bounds check
-    if (row >= MATRIX_SIZE || col >= MATRIX_SIZE) {
-        return;
-    }
+   if (row >= MATRIX_SIZE || col >= MATRIX_SIZE) return;
 
-    float result = 0;
+   float result = 0;
 
-    // Loop over tiles horizontally and k increases by TILE_SIZE so that each thread only accesses it's own relative position within different tiles
+   for (uint k = 0; k < MATRIX_SIZE; k += TILE_SIZE) {
+      uint pairIndexA = row * MATRIX_SIZE + (k + localCol);
+      uint pairIndexB = col * MATRIX_SIZE + (k + localRow);
+      // (k + localRow) * MATRIX_SIZE + col;
 
-    uint index = row * MATRIX_SIZE + col;
-    uint threadCoord = index * (2*MATRIX_SIZE);
-    // Compute partial dot product for this tile
-    for (uint t = 0; t < 2*MATRIX_SIZE ; t += 2) { //did not validate this yet
-        result += dataInt[t + threadCoord] * dataInt[t + 1 + threadCoord];
-    }
+      tileA[localRow][localCol] = dataInt[pairIndexA * 2];
+      tileB[localRow][localCol] = dataInt[pairIndexB * 2 + 1];
 
-    // Store the full result in the output matrix, each thread saves its own respective result
+      barrier();
+
+      for (uint t = 0; t < TILE_SIZE; ++t) {
+         result += tileA[localRow][t] * tileB[t][localCol];
+      }
+
+      barrier();
+   }
+
     output_dataC[row * MATRIX_SIZE + col] = result;
 }

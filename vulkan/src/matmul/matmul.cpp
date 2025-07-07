@@ -16,6 +16,7 @@
 
 uint32_t N = 10; // matrix size, default
 uint32_t TILE = 1;
+uint32_t RESULTS_PER_THREAD = 4;
 
 CommandLineParser commandLineParser;
 
@@ -395,15 +396,17 @@ public:
 				uint32_t MATRIX_SIZE = N;
 				uint32_t TILE_X = TILE;
 				uint32_t TILE_Y = TILE;
+				uint32_t RESULTS_PER_THREAD = RESULTS_PER_THREAD;
 			} specializationData;
 
 			std::vector<VkSpecializationMapEntry> specializationMapEntries = {
 				{vks::initializers::specializationMapEntry(0, offsetof(SpecializationData, MATRIX_SIZE), sizeof(uint32_t))},
 				{vks::initializers::specializationMapEntry(1,offsetof(SpecializationData, TILE_X), sizeof(uint32_t))},
 				{vks::initializers::specializationMapEntry(2, offsetof(SpecializationData, TILE_Y), sizeof(uint32_t))},
+				{vks::initializers::specializationMapEntry(3, offsetof(SpecializationData, TILE_Y), sizeof(uint32_t))},
 			};
 				VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(
-				3, specializationMapEntries.data(), sizeof(SpecializationData), &specializationData);
+				4, specializationMapEntries.data(), sizeof(SpecializationData), &specializationData);
 
 			std::string shaderDir = "glsl";
 			if (commandLineParser.isSet("shaders")) {
@@ -583,13 +586,13 @@ public:
 		// 	LOG("%f \t", Input_MatrixB[i]);
 		// }
 
-		LOG("%f \t", Output_Matrix[0]);
-		// LOG("First row of output matrix:\n");
-		// for (int i = 0; i < cols; ++i) {
-		// 	LOG("%f \t", Output_Matrix[i]);
-		// }
+		// LOG("%f \t", Output_Matrix[0]);
+		LOG("First row of output matrix:\n");
+		for (int i = 0; i < 16; ++i) {
+			LOG("%f \t", Output_Matrix[i]);
+		}
 
-		// std::cout << std::endl;
+		std::cout << std::endl;
 
 		// Clean up
 		vkDestroyBuffer(device, deviceBufferA, nullptr);

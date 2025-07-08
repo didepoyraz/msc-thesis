@@ -16,7 +16,7 @@
 
 uint32_t N = 10; // matrix size, default
 uint32_t TILE = 1;
-uint32_t RESULTS_PER_THREAD = 4;
+uint32_t RESULTS_PER_THREAD = 1;
 
 CommandLineParser commandLineParser;
 
@@ -396,14 +396,14 @@ public:
 				uint32_t MATRIX_SIZE = N;
 				uint32_t TILE_X = TILE;
 				uint32_t TILE_Y = TILE;
-				uint32_t RESULTS_PER_THREAD = RESULTS_PER_THREAD;
+				uint32_t THREAD_COUNT = TILE / RESULTS_PER_THREAD;
 			} specializationData;
 
 			std::vector<VkSpecializationMapEntry> specializationMapEntries = {
 				{vks::initializers::specializationMapEntry(0, offsetof(SpecializationData, MATRIX_SIZE), sizeof(uint32_t))},
 				{vks::initializers::specializationMapEntry(1,offsetof(SpecializationData, TILE_X), sizeof(uint32_t))},
 				{vks::initializers::specializationMapEntry(2, offsetof(SpecializationData, TILE_Y), sizeof(uint32_t))},
-				{vks::initializers::specializationMapEntry(3, offsetof(SpecializationData, TILE_Y), sizeof(uint32_t))},
+				{vks::initializers::specializationMapEntry(3, offsetof(SpecializationData, THREAD_COUNT), sizeof(uint32_t))},
 			};
 				VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(
 				4, specializationMapEntries.data(), sizeof(SpecializationData), &specializationData);
@@ -575,7 +575,7 @@ public:
 		queryTimestamps();
 
 	//    Output buffer contents
-		int cols = 1024;  
+		int cols = N*N;  
 
 		// LOG("First row of matrix A:\n");
 		// for (int i = 0; i < cols; ++i) {
@@ -588,7 +588,7 @@ public:
 
 		// LOG("%f \t", Output_Matrix[0]);
 		LOG("First row of output matrix:\n");
-		for (int i = 0; i < 16; ++i) {
+		for (int i = 0; i < N; ++i) {
 			LOG("%f \t", Output_Matrix[i]);
 		}
 
@@ -639,10 +639,10 @@ int main(int argc, char* argv[]) {
 	// commandLineParser.add("shaders", { "-s", "--shaders" }, 1, "Select shader type to use (glsl or hlsl)");
 	// commandLineParser.parse(argc, argv);
 
-	int threadsPerGroup = TILE*TILE; //current thread group's local size is x=y=1
-	int totalThreads = (N * N);
-	int totalThreadGroups = totalThreads / threadsPerGroup;
-	std::cout << "Threads per group is " << threadsPerGroup << "; Total thread groups " << totalThreadGroups << "; Total threads is " << totalThreads << std::endl;
+	// int threadsPerGroup = TILE*TILE; //current thread group's local size is x=y=1
+	// int totalThreads = (N * N);
+	// int totalThreadGroups = totalThreads / threadsPerGroup;
+	// std::cout << "Threads per group is " << threadsPerGroup << "; Total thread groups " << totalThreadGroups << "; Total threads is " << totalThreads << std::endl;
 
 	VulkanExample *vulkanExample = new VulkanExample();
 	std::cout << "Finished. Press enter to terminate...";

@@ -13,11 +13,11 @@ layout(binding = 2) buffer MatrixC {
 };
 
 //layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in; // each thread will calculate a 2x2 output
+layout (local_size_x_id = 3, local_size_y_id = 3, local_size_z = 1) in; // each thread will calculate a 2x2 output
 
 layout (constant_id = 0) const uint MATRIX_SIZE = 1024;
 layout (constant_id = 1) const uint TILE_SIZE = 16; 
-layout (constant_id = 3) const uint RESULTS_PER_THREAD = 4;
+layout (constant_id = 3) const uint RESULTS_PER_THREAD = 2;
 
 shared float tileA[TILE_SIZE][TILE_SIZE];
 shared float tileB[TILE_SIZE][TILE_SIZE];
@@ -26,12 +26,12 @@ void main() {
 
     uvec2 gid = gl_GlobalInvocationID.xy;
 
-    // each thread handles a 2x2 tile
+    // each thread handles a TILE / RESULTS_PER_THREAD tile
     // compute the starting cell for this tile
-    uint base_x = gid.x*2;
-    uint base_y = gid.y*2;
+    uint base_x = gid.x* RESULTS_PER_THREAD;
+    uint base_y = gid.y*RESULTS_PER_THREAD;
 
-    // loop over the 2x2 tile
+    // // loop over the thread tile
     for (uint dy = 0; dy < RESULTS_PER_THREAD; ++dy) {
         for (uint dx = 0; dx < RESULTS_PER_THREAD; ++dx) {
             uint x = base_x + dx; // row
@@ -40,8 +40,9 @@ void main() {
             if (x >= MATRIX_SIZE || y >= MATRIX_SIZE) {
             return;
             }               
-            // uint idx = base_x * 4 + base_y; // Row-major index
-     
+
+   //  uint idx = base_x * MATRIX_SIZE + base_y; // Row-major index
+   //  output_dataC[idx] = idx;
             for (uint i = 0; i < MATRIX_SIZE; i++) {
                 output_dataC[x * MATRIX_SIZE + y] += (dataA[x * MATRIX_SIZE + i] * dataB[i * MATRIX_SIZE + y]);
             }

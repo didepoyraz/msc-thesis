@@ -16,7 +16,7 @@
 
 uint32_t N = 10; // matrix size, default
 uint32_t TILE = 1;
-uint32_t RESULTS_PER_THREAD = 1;
+uint32_t RESULTS_PER_THREAD = 4;
 
 CommandLineParser commandLineParser;
 

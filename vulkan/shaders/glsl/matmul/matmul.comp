@@ -20,10 +20,9 @@ layout (local_size_x_id = 1, local_size_y_id = 2, local_size_z = 1) in;
 void main() 
 {	
     uint idx = gl_GlobalInvocationID.x;
-
-    // read from the buffer to simulate matrix access
-    float val = dataA[idx];
-
-    // prevent compiler optimization by writing back the result
-    dataA[idx] = val;
+    if (idx < dataA.length())
+    {
+        float val = dataA[idx];
+        dataA[idx] = val; 
+    }
 }

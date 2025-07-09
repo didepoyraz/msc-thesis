@@ -16,25 +16,14 @@ layout(binding = 2) buffer MatrixC {
 //layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout (local_size_x_id = 1, local_size_y_id = 2, local_size_z = 1) in;
 
-layout (constant_id = 0) const uint MATRIX_SIZE = 1024;
-
-float matmul(uint x, uint y){
-	float result = 0.0;
-	for (uint i = 0; i < MATRIX_SIZE; i++) {
-		result += (dataA[x * MATRIX_SIZE + i] * dataB[i * MATRIX_SIZE + y]); 
-	}
-	return result;
-}
 
 void main() 
 {	
-	uint x = gl_GlobalInvocationID.x;
-    uint y = gl_GlobalInvocationID.y;
+    uint idx = gl_GlobalInvocationID.x;
 
-    if (x >= MATRIX_SIZE || y >= MATRIX_SIZE) 
-        return;
+    // read from the buffer to simulate matrix access
+    float val = dataA[idx];
 
-    float result = matmul(x, y);
-
-    output_dataC[x * MATRIX_SIZE + y] = result;
+    // prevent compiler optimization by writing back the result
+    dataA[idx] = val;
 }

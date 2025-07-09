@@ -480,6 +480,8 @@ public:
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, 0);
 
 			// vkCmdBeginQuery(commandBuffer, queryPool_mem, 0, 0); //another query pool for perf @ begin query
+			// warm up
+			vkCmdDispatch(commandBuffer, N/TILE, N/TILE, 1);
 
 			vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPool, 1);
             // dispatch shader (2D, x=y=N, z=1)
@@ -565,7 +567,7 @@ public:
 		queryTimestamps();
 
 	   // Output buffer contents
-		int cols = 1024;  
+		// int cols = 1024;  
 
 		// LOG("First row of matrix A:\n");
 		// for (int i = 0; i < cols; ++i) {
@@ -575,13 +577,13 @@ public:
 		// for (int i = 0; i < cols; ++i) {
 		// 	LOG("%f \t", Input_MatrixB[i]);
 		// }
-		LOG("%f \t", Output_Matrix[0]);
-		LOG("First row of output matrix:\n");
-		for (int i = 0; i < cols; ++i) {
-			LOG("%f \t", Output_Matrix[i]);
-		}
+		// LOG("%f \t", Output_Matrix[0]);
+		// LOG("First row of output matrix:\n");
+		// for (int i = 0; i < cols; ++i) {
+		// 	LOG("%f \t", Output_Matrix[i]);
+		// }
 
-		std::cout << std::endl;
+		// std::cout << std::endl;
 
 		// Clean up
 		vkDestroyBuffer(device, deviceBufferA, nullptr);

@@ -6,7 +6,7 @@
 #include <iostream>
 #include <algorithm>
 #include <chrono>
-
+#include "vulkan_matmul.h"
 #include <vulkan/vulkan.h>
 #include "VulkanTools.h"
 #include "CommandLineParser.hpp"
@@ -21,6 +21,10 @@ CommandLineParser commandLineParser;
 
 class VulkanExample
 {
+private: 
+	float* inA;
+	float* inB;
+	float* outC;
 public:
 	VkInstance instance;
 	VkPhysicalDevice physicalDevice;
@@ -115,8 +119,14 @@ public:
 		return VK_SUCCESS;
 	}
 
-	VulkanExample()
+	VulkanExample(float* inputA, float* inputB, float* outputC, uint32_t N, uint32_t tileSize)
 	{
+		inA = inputA;
+		inB = inputB;
+		outC = outputC;
+		N = N;
+		TILE = tileSize;
+
 		LOG("Running matrix multiplication!\n");
 		VkApplicationInfo appInfo = {};
 		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -216,16 +226,19 @@ public:
 			Prepare storage buffers
 		*/
 		// matrix A
-		std::vector<float> Input_MatrixA(N * N);
+		// std::vector<float> Input_MatrixA(N * N);
+		std::vector<float> Input_MatrixA(inA, inA + N * N);
 		// matrix B
-		std::vector<float> Input_MatrixB(N * N);
-		// output matrix
-		std::vector<float> Output_Matrix(N * N);
+		// std::vector<float> Input_MatrixB(N * N);
+		std::vector<float> Input_MatrixB(inB, inB + N * N);
+
+		// output matrix don't need it anymore since we already have a defined vector outputC to copy the results back
+		// std::vector<float> Output_Matrix(N * N);
 
 		// fill input data
-		uint32_t n = 0;
-		std::generate(Input_MatrixA.begin(), Input_MatrixA.end(), [&n] { return n++; });
-        std::generate(Input_MatrixB.begin(), Input_MatrixB.end(), [&n] { return n++; });
+		// uint32_t n = 0;
+		// std::generate(Input_MatrixA.begin(), Input_MatrixA.end(), [&n] { return n++; });
+        // std::generate(Input_MatrixB.begin(), Input_MatrixB.end(), [&n] { return n++; });
 
 		const VkDeviceSize bufferSize = N * N * sizeof(float);
 
@@ -385,11 +398,16 @@ public:
 
 			// Pass SSBO size via specialization constant
 			struct SpecializationData {
-				uint32_t MATRIX_SIZE = N;
-				uint32_t TILE_X = TILE;
-				uint32_t TILE_Y = TILE;
-			} specializationData;
-
+				uint32_t MATRIX_SIZE;
+				uint32_t TILE_X;
+				uint32_t TILE_Y;
+			};
+			
+			SpecializationData specializationData = {
+				N,     // MATRIX_SIZE
+				TILE,  // TILE_X
+				TILE   // TILE_Y
+			};
 			std::vector<VkSpecializationMapEntry> specializationMapEntries = {
 				{vks::initializers::specializationMapEntry(0, offsetof(SpecializationData, MATRIX_SIZE), sizeof(uint32_t))},
 				{vks::initializers::specializationMapEntry(1,offsetof(SpecializationData, TILE_X), sizeof(uint32_t))},
@@ -555,7 +573,7 @@ public:
 			vkInvalidateMappedMemoryRanges(device, 1, &mappedRange);
 
 			// Copy to output
-			memcpy(Output_Matrix.data(), mapped, bufferSize);
+			memcpy(outC, mapped, bufferSize);
 			vkUnmapMemory(device, hostMemoryC);
 		}
 
@@ -565,7 +583,7 @@ public:
 		queryTimestamps();
 
 	   // Output buffer contents
-		int cols = 1024;  
+		// int cols = 1024;  
 
 		// LOG("First row of matrix A:\n");
 		// for (int i = 0; i < cols; ++i) {
@@ -575,13 +593,13 @@ public:
 		// for (int i = 0; i < cols; ++i) {
 		// 	LOG("%f \t", Input_MatrixB[i]);
 		// }
-		LOG("%f \t", Output_Matrix[0]);
-		LOG("First row of output matrix:\n");
-		for (int i = 0; i < cols; ++i) {
-			LOG("%f \t", Output_Matrix[i]);
-		}
+		// LOG("%f \t", Output_Matrix[0]);
+		// LOG("First row of output matrix:\n");
+		// for (int i = 0; i < cols; ++i) {
+		// 	LOG("%f \t", Output_Matrix[i]);
+		// }
 
-		std::cout << std::endl;
+		// std::cout << std::endl;
 
 		// Clean up
 		vkDestroyBuffer(device, deviceBufferA, nullptr);
@@ -616,25 +634,30 @@ public:
 	}
 };
 
-int main(int argc, char* argv[]) {
-
-	if (argc > 2) {
-        N = std::atoi(argv[1]);
-		TILE = std::atoi(argv[2]);
-    }
-
-	std::cout << "Using N = " << N << std::endl;
-
-	// commandLineParser.add("shaders", { "-s", "--shaders" }, 1, "Select shader type to use (glsl or hlsl)");
-	// commandLineParser.parse(argc, argv);
-
-	int threadsPerGroup = 1; //current thread group's local size is x=y=1
-	int totalThreads = (N * N);
-	std::cout << "Threads per group is " << threadsPerGroup << "; Total thread groups is " << totalThreads << std::endl;
-
-	VulkanExample *vulkanExample = new VulkanExample();
-	std::cout << "Finished. Press enter to terminate...";
-	std::cin.get();
-	delete(vulkanExample);
-	return 0;
+extern "C" void vulkan_matmul(float* A, float* B, float* C, uint32_t N, uint32_t TILE) {
+    VulkanExample* example = new VulkanExample(A, B, C, N, TILE);
+    delete example;
 }
+
+// int main(int argc, char* argv[]) {
+
+// 	if (argc > 2) {
+//         N = std::atoi(argv[1]);
+// 		TILE = std::atoi(argv[2]);
+//     }
+
+// 	std::cout << "Using N = " << N << std::endl;
+
+// 	// commandLineParser.add("shaders", { "-s", "--shaders" }, 1, "Select shader type to use (glsl or hlsl)");
+// 	// commandLineParser.parse(argc, argv);
+
+// 	int threadsPerGroup = 1; //current thread group's local size is x=y=1
+// 	int totalThreads = (N * N);
+// 	std::cout << "Threads per group is " << threadsPerGroup << "; Total thread groups is " << totalThreads << std::endl;
+
+// 	VulkanExample *vulkanExample = new VulkanExample();
+// 	std::cout << "Finished. Press enter to terminate...";
+// 	std::cin.get();
+// 	delete(vulkanExample);
+// 	return 0;
+// }

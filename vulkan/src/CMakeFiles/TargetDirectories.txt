@@ -1,0 +1,9 @@
+/home/pi/Desktop/msc-thesis/vulkan/src/CMakeFiles/edit_cache.dir
+/home/pi/Desktop/msc-thesis/vulkan/src/CMakeFiles/rebuild_cache.dir
+/home/pi/Desktop/msc-thesis/vulkan/src/base/CMakeFiles/base.dir
+/home/pi/Desktop/msc-thesis/vulkan/src/base/CMakeFiles/edit_cache.dir
+/home/pi/Desktop/msc-thesis/vulkan/src/base/CMakeFiles/rebuild_cache.dir
+/home/pi/Desktop/msc-thesis/vulkan/src/src/CMakeFiles/matmul.dir
+/home/pi/Desktop/msc-thesis/vulkan/src/src/CMakeFiles/vulkan_c_main.dir
+/home/pi/Desktop/msc-thesis/vulkan/src/src/CMakeFiles/edit_cache.dir
+/home/pi/Desktop/msc-thesis/vulkan/src/src/CMakeFiles/rebuild_cache.dir

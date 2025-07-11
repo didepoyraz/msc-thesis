@@ -23,16 +23,20 @@ function(buildExample EXAMPLE_NAME)
 	source_group("Shaders\\HLSL" FILES ${SHADERS_HLSL})
 	# Add optional readme / tutorial
 	file(GLOB README_FILES "${EXAMPLE_FOLDER}/*.md")
-	if(WIN32)
-		add_executable(${EXAMPLE_NAME} WIN32 ${MAIN_CPP} ${SOURCE} ${MAIN_HEADER} ${SHADERS_GLSL} ${SHADERS_HLSL} ${README_FILES})
-		target_link_libraries(${EXAMPLE_NAME} base ${Vulkan_LIBRARY} ${WINLIBS})
-	else(WIN32)
-		add_executable(${EXAMPLE_NAME} ${MAIN_CPP} ${SOURCE} ${MAIN_HEADER} ${SHADERS_GLSL} ${SHADERS_HLSL} ${README_FILES})
-		target_link_libraries(${EXAMPLE_NAME} base )
-	endif(WIN32)
+	if(NOT ${EXAMPLE_NAME} STREQUAL "matmul")
+		if(WIN32)
+			add_executable(${EXAMPLE_NAME} WIN32 ${MAIN_CPP} ${SOURCE} ${MAIN_HEADER} ${SHADERS_GLSL} ${SHADERS_HLSL} ${README_FILES})
+			target_link_libraries(${EXAMPLE_NAME} base ${Vulkan_LIBRARY} ${WINLIBS})
+		else()
+			add_executable(${EXAMPLE_NAME} ${MAIN_CPP} ${SOURCE} ${MAIN_HEADER} ${SHADERS_GLSL} ${SHADERS_HLSL} ${README_FILES})
+			target_link_libraries(${EXAMPLE_NAME} base)
+		endif()
+	endif()
 
 	# file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
-	set_target_properties(${EXAMPLE_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+	if (TARGET ${EXAMPLE_NAME})
+    set_target_properties(${EXAMPLE_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+	endif()
 	if(${EXAMPLE_NAME} STREQUAL "texture3d")
 		if(APPLE)
 			# SRS - Use MacPorts paths as default since the same on x86 and Apple Silicon, can override for homebrew on cmake command line
@@ -65,6 +69,15 @@ function(buildExample EXAMPLE_NAME)
 	if(RESOURCE_INSTALL_DIR)
 		install(TARGETS ${EXAMPLE_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
 	endif()
+
+	if(${EXAMPLE_NAME} STREQUAL "matmul")
+        add_executable(cpu_gpu_comb
+            ${EXAMPLE_FOLDER}/cpu_gpu_comb.c
+            ${EXAMPLE_FOLDER}/matmul.cpp
+        )
+        target_include_directories(cpu_gpu_comb PRIVATE ${EXAMPLE_FOLDER})
+        target_link_libraries(cpu_gpu_comb base ${Vulkan_LIBRARY})
+    endif()
 endfunction(buildExample)
 
 # Build all examples

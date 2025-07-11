@@ -1,0 +1,1 @@
+/usr/bin/c++  -DVK_USE_PLATFORM_HEADLESS_EXT CMakeFiles/vulkan_c_main.dir/matmul/cpu_gpu_comb.c.o CMakeFiles/vulkan_c_main.dir/matmul/matmul.cpp.o -o ../bin/vulkan_c_main  /usr/lib/aarch64-linux-gnu/libvulkan.so ../base/libbase.a /usr/lib/aarch64-linux-gnu/libvulkan.so

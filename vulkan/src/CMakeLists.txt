@@ -74,9 +74,22 @@ function(buildExample EXAMPLE_NAME)
         add_executable(cpu_gpu_comb
             ${EXAMPLE_FOLDER}/cpu_gpu_comb.c
             ${EXAMPLE_FOLDER}/matmul.cpp
+			${PROJECT_SOURCE_DIR}/utils/utils.c
         )
-        target_include_directories(cpu_gpu_comb PRIVATE ${EXAMPLE_FOLDER})
-        target_link_libraries(cpu_gpu_comb base ${Vulkan_LIBRARY})
+	target_include_directories(
+			cpu_gpu_comb PRIVATE
+			${EXAMPLE_FOLDER}
+			${PROJECT_SOURCE_DIR}/utils
+			$ENV{HOME}/blis/cortexa57/include
+
+		)
+	target_link_libraries(cpu_gpu_comb
+			base
+			${Vulkan_LIBRARY}
+			/home/pi/Desktop/blis/lib/cortexa57/libblis.a
+			pthread
+			m
+		)
     endif()
 endfunction(buildExample)
 

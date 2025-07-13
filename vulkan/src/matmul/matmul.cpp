@@ -59,10 +59,10 @@ public:
 		vkGetQueryPoolResults(device, queryPool, 2, 1, sizeof(timestampExeEnd), &timestampExeEnd, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
 		vkGetQueryPoolResults(device, queryPool, 3, 1, sizeof(timestampEnd), &timestampEnd, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
 
-		std::cout << "Timestamp Pipeline Start: " << timestamp1 << std::endl;
-		std::cout << "Timestamp Exe Start: " << timestampStart << std::endl;
-		std::cout << "Timestamp Exe End: " << timestampExeEnd << std::endl;
-		std::cout << "Timestamp All End: " << timestampEnd << std::endl;
+		// std::cout << "Timestamp Pipeline Start: " << timestamp1 << std::endl;
+		// std::cout << "Timestamp Exe Start: " << timestampStart << std::endl;
+		// std::cout << "Timestamp Exe End: " << timestampExeEnd << std::endl;
+		// std::cout << "Timestamp All End: " << timestampEnd << std::endl;
 
 		uint64_t elapsedTime1 = timestampStart - timestamp1;
 		uint64_t elapsedTime2 = timestampExeEnd - timestampStart;
@@ -73,6 +73,7 @@ public:
 		std::cout << "Computation time = " << elapsedTime2 << " ns" << std::endl;
 		std::cout << "Buffer write + GPU->host transfer time = " << elapsedTime3 << " ns" << std::endl;
 		std::cout << "Total Execution time = " << totalExecutionTime << " ns" << std::endl;
+		std::cout << "******************************************" << std::endl;
 	}
 
 	VkResult createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkBuffer *buffer, VkDeviceMemory *memory, VkDeviceSize size, void *data = nullptr)
@@ -89,7 +90,7 @@ public:
 		VkMemoryAllocateInfo memAlloc = vks::initializers::memoryAllocateInfo();
 		vkGetBufferMemoryRequirements(device, *buffer, &memReqs); // querying vulkan to find out how much memory we need for this buffer
 		
-		std::cout << "Buffer Size: " << memReqs.size / (1024 * 1024) << " MB" << std::endl;
+		// std::cout << "Buffer Size: " << memReqs.size / (1024 * 1024) << " MB" << std::endl;
 
 		memAlloc.allocationSize = memReqs.size;
 		// Find a memory type index that fits the properties of the buffer
@@ -127,7 +128,7 @@ public:
 		N = N;
 		TILE = tileSize;
 
-		LOG("Running matrix multiplication!\n");
+		LOG("Running matrix multiplication!\n******************************************\n");
 		VkApplicationInfo appInfo = {};
 		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 		appInfo.pApplicationName = "Vulkan matrix multiplication";
@@ -162,11 +163,11 @@ public:
 
 		VkPhysicalDeviceFeatures features;
 		vkGetPhysicalDeviceFeatures(physicalDevice, &features);
-		std::cout << "shaderInt64: " << features.shaderInt64 << std::endl;
+		// std::cout << "shaderInt64: " << features.shaderInt64 << std::endl;
 
 		VkPhysicalDeviceProperties deviceProperties;
 		vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
-		LOG("GPU: %s\n", deviceProperties.deviceName);
+		// LOG("GPU: %s\n", deviceProperties.deviceName);
 
 		// Request a single compute queue
 		const float defaultQueuePriority(0.0f);
@@ -638,26 +639,3 @@ extern "C" void vulkan_matmul(float* A, float* B, float* C, uint32_t N, uint32_t
     VulkanExample* example = new VulkanExample(A, B, C, N, TILE);
     delete example;
 }
-
-// int main(int argc, char* argv[]) {
-
-// 	if (argc > 2) {
-//         N = std::atoi(argv[1]);
-// 		TILE = std::atoi(argv[2]);
-//     }
-
-// 	std::cout << "Using N = " << N << std::endl;
-
-// 	// commandLineParser.add("shaders", { "-s", "--shaders" }, 1, "Select shader type to use (glsl or hlsl)");
-// 	// commandLineParser.parse(argc, argv);
-
-// 	int threadsPerGroup = 1; //current thread group's local size is x=y=1
-// 	int totalThreads = (N * N);
-// 	std::cout << "Threads per group is " << threadsPerGroup << "; Total thread groups is " << totalThreads << std::endl;
-
-// 	VulkanExample *vulkanExample = new VulkanExample();
-// 	std::cout << "Finished. Press enter to terminate...";
-// 	std::cin.get();
-// 	delete(vulkanExample);
-// 	return 0;
-// }

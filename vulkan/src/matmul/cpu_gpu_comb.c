@@ -29,12 +29,14 @@ void blis_matmul(double* A, double* B, double* C, uint32_t N, uint32_t TILE){
 }
 
 int main(int argc, char* argv[]) {
+    int M = 1024;
     int N = 1024;
-    int TILE = 16;
+    int K = 1024;
+    int TILE_SIZE = 16;
 
     if (argc > 2) {
         N = atoi(argv[1]);
-        TILE = atoi(argv[2]);
+        TILE_SIZE = atoi(argv[2]);
     }
 
     // initialise the gpu float vectors
@@ -61,16 +63,23 @@ int main(int argc, char* argv[]) {
     printf("Calling BLIS GEMM with N = %d\n----------------\n", N);
 
     clock_gettime(CLOCK_MONOTONIC, &tic);
-    blis_matmul(A_b, B_b, C_b, N, TILE);
+    blis_matmul(A_b, B_b, C_b, N, TILE_SIZE);
     clock_gettime(CLOCK_MONOTONIC, &toc);
 
     elapsed = (toc.tv_sec - tic.tv_sec) * 1000000000LL + (toc.tv_nsec - tic.tv_nsec);
     
     printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
 
-    vulkan_matmul(A, B, C, N, TILE);
+    vulkan_matmul(A, B, C, N, TILE_SIZE);
 
     // print_matrix_double(C_b, N);
+    for (int i = 0; i < M; i += TILE_SIZE) {
+        for (int j = 0; j < N; j += TILE_SIZE) {
+            for (int p = 0; p < K; p += TILE_SIZE) {
+                
+            }
+        }
+    }
 
     // free everything
     free(A); free(B); free(C);

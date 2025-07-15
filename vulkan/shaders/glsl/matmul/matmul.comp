@@ -12,26 +12,33 @@ layout(binding = 2) buffer MatrixC {
    float output_dataC[];
 };
 
+layout(push_constant) uniform PushConstants {
+    uint offsetA;
+    uint offsetB;
+    uint offsetC;
+} pc;
+
 //layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-layout (local_size_x_id = 1, local_size_y_id = 2, local_size_z = 1) in;
+layout (local_size_x_id = 1, local_size_y_id = 1, local_size_z = 1) in;
 
 layout (constant_id = 0) const uint MATRIX_SIZE = 1024;
 layout (constant_id = 1) const uint TILE_SIZE = 16; 
+layout (constant_id = 2) const uint leadingDimensionN = 4096; 
 
 shared float tileA[TILE_SIZE][TILE_SIZE];
 shared float tileB[TILE_SIZE][TILE_SIZE];
 
 void main() {
     // global position in the matrix
-    uint row = gl_GlobalInvocationID.y;
-    uint col = gl_GlobalInvocationID.x;
+    uint row = pc.offsetA + gl_GlobalInvocationID.y;
+    uint col = pc.offsetB + gl_GlobalInvocationID.x;
 
     // local position within the workgroup
     uint localRow = gl_LocalInvocationID.y;
     uint localCol = gl_LocalInvocationID.x;
 
     // Bounds check
-    if (row >= MATRIX_SIZE || col >= MATRIX_SIZE) {
+    if (row >= leadingDimensionN || col >= leadingDimensionN) {
         return;
     }
 
@@ -42,7 +49,6 @@ void main() {
 
         // Each thread loads one element into the tile from A and B per iteration and MATRIX_SIZE/TILE_SIZE 
         // positions per tileA and tileB in total
-
         // tileA gets the row-wise elements from dataA and tileB gets the column-wise elements. For a thread, loop iterations
         // will have it shifted to different row positions of the partial dot product of the dataA (according to tiles) for 
         // tileA and different column positions of the partial dot product for dataB for tileB
@@ -55,8 +61,8 @@ void main() {
          // tileA stores a horizontal slice (row-major) of A
          // tileB stores a vertical slice (column-major) of B
 
-        tileA[localRow][localCol] = dataA[row * MATRIX_SIZE + (k + localCol)];  
-        tileB[localRow][localCol] = dataB[( k + localRow) * MATRIX_SIZE + col];
+        tileA[localRow][localCol] = dataA[row * leadingDimensionN + (k + localCol)];  
+        tileB[localRow][localCol] = dataB[(k + localRow) * leadingDimensionN + col];
 
         // Synchronize all threads in the workgroup for the tile to be completed
         barrier();
@@ -70,6 +76,11 @@ void main() {
         barrier();
     }
 
+    uint outputRow = pc.offsetC + gl_GlobalInvocationID.y;
+    uint outputCol = pc.offsetC + gl_GlobalInvocationID.x;
+
     // Store the full result in the output matrix, each thread saves its own respective result
-    output_dataC[row * MATRIX_SIZE + col] = result;
+     if (outputRow < leadingDimensionN && outputCol < leadingDimensionN) {
+        output_dataC[outputRow * leadingDimensionN + outputCol] = result;
+    }
 }

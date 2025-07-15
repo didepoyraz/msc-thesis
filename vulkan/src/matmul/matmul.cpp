@@ -14,17 +14,16 @@
 
 #define LOG(...) printf(__VA_ARGS__)
 
-uint32_t N = 10; // matrix size, default
-uint32_t TILE = 1;
+// uint32_t N = 10; // matrix size, default
+// uint32_t TILE = 1;
 
 CommandLineParser commandLineParser;
+
 
 struct PushConstants {
     uint32_t offsetA;
     uint32_t offsetB;
     uint32_t offsetC;
-    uint32_t tileSize;
-    uint32_t matrixSize;
 };
 
 class VulkanExample
@@ -40,8 +39,11 @@ public:
 	VkDeviceMemory deviceMemoryA, deviceMemoryB, deviceMemoryC;
 	VkDeviceMemory hostMemoryA, hostMemoryB, hostMemoryC;
 	VkDeviceSize bufferSize;
+	uint32_t N;
+	uint32_t ldN;
+	uint32_t TILE;
 
-float* mappedHostC = nullptr;
+	float* mappedHostC = nullptr;
 	VkInstance instance;
 	VkPhysicalDevice physicalDevice;
 	VkDevice device;
@@ -145,6 +147,7 @@ float* mappedHostC = nullptr;
 	}
 
 	void vkInit(){
+
 		VkApplicationInfo appInfo = {};
 		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 		appInfo.pApplicationName = "Vulkan matrix multiplication";
@@ -210,19 +213,19 @@ float* mappedHostC = nullptr;
 		VK_CHECK_RESULT(vkCreateQueryPool(device, &queryPoolCreateInfo, nullptr, &queryPool));
 	}
 
-	void generateMatrixBuffersAndCopyToDev(float* inputA, float* inputB, float* outputC, uint32_t N, uint32_t tileSize) {
+	void generateMatrixBuffersAndCopyToDev(float* inputA, float* inputB, float* outputC, uint32_t ldN, uint32_t N) {
 		inA = inputA;
 		inB = inputB;
 		outC = outputC;
-		N = N;
-		TILE = tileSize;
+		this->ldN = ldN;
+		this->N = N;
 
 		// matrix A
-		std::vector<float> Input_MatrixA(inA, inA + N * N);
+		std::vector<float> Input_MatrixA(inA, inA + ldN * ldN);
 		// matrix B
-		std::vector<float> Input_MatrixB(inB, inB + N * N);
+		std::vector<float> Input_MatrixB(inB, inB + ldN * ldN);
 
-		bufferSize = N * N * sizeof(float);
+		bufferSize = ldN * ldN * sizeof(float);
 
 		// Copy input data to GPU mem using staging buffer 
 		
@@ -380,22 +383,24 @@ float* mappedHostC = nullptr;
 		// Create pipeline
 		VkComputePipelineCreateInfo computePipelineCreateInfo = vks::initializers::computePipelineCreateInfo(pipelineLayout, 0);
 
+		// compute tile size according to the size of N
+		TILE = (N >= 16) ? 16 : 2;
 		// Pass SSBO size via specialization constant
 		struct SpecializationData {
 			uint32_t MATRIX_SIZE;
-			uint32_t TILE_X;
-			uint32_t TILE_Y;
+			uint32_t TILE;
+			uint32_t ldN;
 		};
 		
 		SpecializationData specializationData = {
 			N,     // MATRIX_SIZE
-			TILE,  // TILE_X
-			TILE   // TILE_Y
+			TILE,   // TILE_Y
+			ldN
 		};
 		std::vector<VkSpecializationMapEntry> specializationMapEntries = {
 			{vks::initializers::specializationMapEntry(0, offsetof(SpecializationData, MATRIX_SIZE), sizeof(uint32_t))},
-			{vks::initializers::specializationMapEntry(1,offsetof(SpecializationData, TILE_X), sizeof(uint32_t))},
-			{vks::initializers::specializationMapEntry(2, offsetof(SpecializationData, TILE_Y), sizeof(uint32_t))},
+			{vks::initializers::specializationMapEntry(1,offsetof(SpecializationData, TILE), sizeof(uint32_t))},
+			{vks::initializers::specializationMapEntry(2, offsetof(SpecializationData, ldN), sizeof(uint32_t))}
 		};
 			VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(
 			3, specializationMapEntries.data(), sizeof(SpecializationData), &specializationData);
@@ -430,7 +435,7 @@ float* mappedHostC = nullptr;
 		VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
 	}
 
-	void submitComputeWork() {
+	void submitComputeWork(const PushConstants& pc) {
 
 		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 	
@@ -479,9 +484,13 @@ float* mappedHostC = nullptr;
 
 		// vkCmdBeginQuery(commandBuffer, queryPool_mem, 0, 0); //another query pool for perf @ begin query
 
+		vkCmdPushConstants( commandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstants),&pc);       
+
 		vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPool, 1);
 		// dispatch shader (2D, x=y=N, z=1)
+		LOG("\nN: %i, TILE: %i\n", N, TILE);
 		vkCmdDispatch(commandBuffer, N/TILE, N/TILE, 1);
+		// vkCmdDispatch(commandBuffer, N, N, 1);
 
 		// Barrier to ensure that shader writes are finished before buffer is read back from GPU
 		VkBufferMemoryBarrier outputBarrier = vks::initializers::bufferMemoryBarrier();
@@ -553,11 +562,23 @@ float* mappedHostC = nullptr;
 		vkInvalidateMappedMemoryRanges(device, 1, &mappedRange);
 
 		// Copy to output
-		memcpy(outC, mapped, bufferSize);
+		float* fdata = static_cast<float*>(mapped);
+		for (int i = 0; i < 8; ++i) {
+			printf("mapped: %f\t", fdata[i]);
+		}
+
+		//TODO fix the memcpy because the copying back does not necessarily mathc
+		memcpy(outC + pc.offsetC, mapped, N * N * sizeof(float));
 		vkUnmapMemory(device, hostMemoryC);
 
 		vkQueueWaitIdle(queue);
 		queryTimestamps();
+
+		LOG("output matrix inside vulkan:\n");
+		for (int i = 0; i < 4; ++i) {
+			LOG("%f \t", outC[i]);
+		}
+
 	}
 
 	void cleanupAllBuffers() {
@@ -593,26 +614,49 @@ float* mappedHostC = nullptr;
 	}
 };
 
-extern "C" void vulkan_matmul(float* A, float* B, float* C, uint32_t N, uint32_t TILE, uint32_t offsetA, uint32_t offsetB, uint32_t offsetC) {
-    VulkanExample* example = new VulkanExample();
+static VulkanExample* vkInstance = nullptr;
+
+extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t N) {
+    
+	if (vkInstance) {
+		delete vkInstance;
+	}
+
+	LOG("Initialising Vulkan\n");
+	// LOG("First row of matrix A:\n");
+	// for (int i = 0; i < 4; ++i) {
+	// 	LOG("%f \t", B[i]);
+	// }
+
+	vkInstance = new VulkanExample();
 	
+	vkInstance->vkInit();                          // Vulkan instance
+    vkInstance->pickPhysicalDevAndQueue();         // Pick GPU and queue family
+    vkInstance->createLogicalDevAndQueue();        // Create logical device and queue
+    vkInstance->createCommandAndQueryPool();       // Command pool and timestamp pool
+
+	//Create buffers and upload input matrices
+    vkInstance->generateMatrixBuffersAndCopyToDev(A, B, C, ldN, N);
+
+    //Create compute pipeline and descriptor sets
+    vkInstance->createComputePipeline();
+	LOG("Finished Initialisation\n");
+}
+
+
+
+extern "C" void vulkan_submit_tile(uint32_t offsetA, uint32_t offsetB, uint32_t offsetC){
+	if (!vkInstance) {
+		std::cerr << "Error: Vulkan has not been initialized!" << std::endl;
+	}
+
+	LOG("Submitting task to Compute Pipeline\n");
+
 	PushConstants pc = {
         offsetA,
         offsetB,
-        offsetC,
-        TILE,
-        ::N
+        offsetC
     };
-	example->vkInit();                          // Vulkan instance
-    example->pickPhysicalDevAndQueue();         // Pick GPU and queue family
-    example->createLogicalDevAndQueue();        // Create logical device and queue
-    example->createCommandAndQueryPool();       // Command pool and timestamp pool
-
-	//Create buffers and upload input matrices
-    example->generateMatrixBuffersAndCopyToDev(A, B, C, N, TILE);
-
-    //Create compute pipeline and descriptor sets
-    example->createComputePipeline();
-
-
+	
+	vkInstance->submitComputeWork(pc);
 }

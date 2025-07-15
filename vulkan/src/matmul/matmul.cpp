@@ -68,6 +68,11 @@ public:
 	VkQueryPool queryPool;
 	// VkQueryPool queryPool_mem;
 
+	uint64_t totalSetupTime = 0;
+	uint64_t totalComputeTime = 0;
+	uint64_t totalTransferTime = 0;
+	uint64_t totalTime = 0;
+
 
 	/*
 		get timestamps from the query pool
@@ -84,16 +89,21 @@ public:
 		// std::cout << "Timestamp Exe End: " << timestampExeEnd << std::endl;
 		// std::cout << "Timestamp All End: " << timestampEnd << std::endl;
 
-		uint64_t elapsedTime1 = timestampStart - timestamp1;
-		uint64_t elapsedTime2 = timestampExeEnd - timestampStart;
-		uint64_t elapsedTime3 = timestampEnd - timestampExeEnd;
-		uint64_t totalExecutionTime = timestampEnd - timestamp1;
-		
-		std::cout << "Bufffer setup time = " << elapsedTime1 << " ns" << std::endl;
-		std::cout << "Computation time = " << elapsedTime2 << " ns" << std::endl;
-		std::cout << "Buffer write + GPU->host transfer time = " << elapsedTime3 << " ns" << std::endl;
-		std::cout << "Total Execution time = " << totalExecutionTime << " ns" << std::endl;
-		std::cout << "******************************************" << std::endl;
+		uint64_t setupTime = timestampStart - timestamp1;
+		uint64_t computeTime = timestampExeEnd - timestampStart;
+		uint64_t transferTime = timestampEnd - timestampExeEnd;
+		uint64_t total = timestampEnd - timestamp1;
+
+		totalSetupTime += setupTime;
+		totalComputeTime += computeTime;
+		totalTransferTime += transferTime;
+		totalTime += total;
+			
+		// std::cout << "Bufffer setup time = " << setupTime << " ns" << std::endl;
+		// std::cout << "Computation time = " << computeTime << " ns" << std::endl;
+		// std::cout << "Buffer write + GPU->host transfer time = " << transferTime << " ns" << std::endl;
+		// std::cout << "Total Execution time = " << total << " ns" << std::endl;
+		// std::cout << "******************************************" << std::endl;
 	}
 
 	VkResult createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkBuffer *buffer, VkDeviceMemory *memory, VkDeviceSize size, void *data = nullptr, void** persistentMapping = nullptr)
@@ -490,7 +500,7 @@ public:
 
 		vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPool, 1);
 		// dispatch shader (2D, x=y=N, z=1)
-		LOG("\nN: %i, TILE: %i\n", N, TILE);
+		// LOG("\nN: %i, TILE: %i\n", N, TILE);
 		vkCmdDispatch(commandBuffer, N/TILE, N/TILE, 1);
 		// vkCmdDispatch(commandBuffer, N, N, 1);
 
@@ -564,16 +574,16 @@ public:
 		vkInvalidateMappedMemoryRanges(device, 1, &mappedRange);
 
 		// Copy to output
-		float* fdata = static_cast<float*>(mapped);
-		LOG("\nmapped: ");
-		for (int i = 0; i < 16; ++i) {
-			printf(": %f\t", fdata[i]);
-		}
-		LOG("\n--------------\nMatrix C before adding mapped: \n");
-		for (int i = 0; i < 16; ++i) {
-			printf(": %f\t", outC[i]);
-		}
-		LOG("\n\n");
+		// float* fdata = static_cast<float*>(mapped);
+		// LOG("\nmapped: ");
+		// for (int i = 0; i < 16; ++i) {
+		// 	printf(": %f\t", fdata[i]);
+		// }
+		// LOG("\n--------------\nMatrix C before adding mapped: \n");
+		// for (int i = 0; i < 16; ++i) {
+		// 	printf(": %f\t", outC[i]);
+		// }
+		// LOG("\n\n");
 
 		//TODO fix the memcpy because the copying back does not necessarily mathc
 		memcpy(outC, mapped, ldN*ldN * sizeof(float));
@@ -583,12 +593,21 @@ public:
 		vkQueueWaitIdle(queue);
 		queryTimestamps();
 
-		LOG("\n--------------\nMatrix C AFTER adding mapped: \n");
-		for (int i = 0; i < 16; ++i) {
-			LOG("%f \t", outC[i]);
-		}
+		// LOG("\n--------------\nMatrix C AFTER adding mapped: \n");
+		// for (int i = 0; i < 16; ++i) {
+		// 	LOG("%f \t", outC[i]);
+		// }
 
 	}
+
+	void printTotalExecutionTime() const {
+	std::cout << "\n===== Vulkan Timing Summary Across All Tiles =====\n";
+	std::cout << "Total Buffer Setup Time:        " << totalSetupTime     << " ns\n";
+	std::cout << "Total Compute Shader Time:      " << totalComputeTime   << " ns\n";
+	std::cout << "Total GPU->Host Transfer Time:  " << totalTransferTime  << " ns\n";
+	std::cout << "Total End-to-End GPU Time:      " << totalTime          << " ns\n";
+	std::cout << "==================================================\n";
+}
 
 	void cleanupAllBuffers() {
 		vkDestroyBuffer(device, deviceBufferA, nullptr);
@@ -603,6 +622,7 @@ public:
 
 	~VulkanExample()
 	{
+		cleanupAllBuffers();
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
@@ -652,8 +672,6 @@ extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t
 	LOG("Finished Initialisation\n");
 }
 
-
-
 extern "C" void vulkan_submit_tile(uint32_t offsetRowA, uint32_t offsetColA, uint32_t offsetRowB, uint32_t offsetColB, uint32_t offsetRowC, uint32_t offsetColC){
 	if (!vkInstance) {
 		std::cerr << "Error: Vulkan has not been initialized!" << std::endl;
@@ -671,4 +689,17 @@ extern "C" void vulkan_submit_tile(uint32_t offsetRowA, uint32_t offsetColA, uin
     };
 	
 	vkInstance->submitComputeWork(pc);
+}
+
+extern "C" void vulkan_cleanup() {
+    if (vkInstance) {
+        delete vkInstance;
+        vkInstance = nullptr;
+    }
+}
+
+extern "C" void vulkan_print_total_time() {
+	if (vkInstance) {
+			vkInstance->printTotalExecutionTime();
+	}
 }

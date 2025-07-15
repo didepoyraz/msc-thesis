@@ -81,12 +81,12 @@ int main(int argc, char* argv[]) {
     clock_gettime(CLOCK_MONOTONIC, &toc);
 
     elapsed = (toc.tv_sec - tic.tv_sec) * 1000000000LL + (toc.tv_nsec - tic.tv_nsec);
-    printf("Resulting Matrix: \n");
-    print_matrix_double(C_b, N);
+    // printf("Resulting Matrix: \n");
+    // print_matrix_double(C_b, N);
     printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
 
-    print_matrix_float(A, N);
-    print_matrix_float(B, N);
+    // print_matrix_float(A, N);
+    // print_matrix_float(B, N);
 
     vulkan_init(A, B, C, N, BLOCK_SIZE);
     // vulkan_submit_tile(0, 0, 0);
@@ -95,19 +95,24 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < M; i += BLOCK_SIZE) {
         for (int j = 0; j < N; j +=  BLOCK_SIZE) {
             for (int p = 0; p < K; p +=  BLOCK_SIZE) {
-                printf("\nith: %i, jth: %i, pth: %i loop\n", i , j, p);
+                // printf("\nith: %i, jth: %i, pth: %i loop\n", i , j, p);
                 // TODO add the offsets as input to the vulkan multiplication
-                printf("A offset: (%i, %i), B offset: (%i, %i), C offset (%i, %i\n)", i, p, p, j, i, j);
+                // printf("A offset: (%i, %i), B offset: (%i, %i), C offset (%i, %i\n)", i, p, p, j, i, j);
             //    printf("A offset: %i, B offset: %i, C offset %i\n",offsetA(i, p), offsetB(p, j), offsetC(i, j));
                 vulkan_submit_tile(i, p, p, j, i, j);
                
             }
         }
     }
-    printf("\noutput matrix after vulkan: \n");
-    print_matrix_float(C, N);
+
+    // printf("\noutput matrix after vulkan: \n");
+    // print_first_row_matrix_float(C, N);
+
+    vulkan_print_total_time();
     // free everything
     free(A); free(B); free(C);
     free(A_b); free(B_b); free(C_b); 
+    vulkan_cleanup();
+    
     return 0;
 }

@@ -4,7 +4,7 @@
 #include "vulkan_matmul.h"
 #include <time.h>
 #include "utils.h"
-#define ldN 1024
+#define ldN 4
 
 // #define offsetA(i, p) A[(i) + (p)*ldN]
 // #define offsetB(p, j) B[(p) + (j)*ldN]
@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
     int K = 1024;
     int BLOCK_SIZE = 512;
     int GPU_TILE_SIZE = 16;
-
+   
     if (argc > 2) {
         M = atoi(argv[1]);
         N = atoi(argv[1]);
@@ -51,7 +51,8 @@ int main(int argc, char* argv[]) {
         
         BLOCK_SIZE = atoi(argv[2]);
     }
-
+    // int ldN = N;
+    
     // initialise the gpu float vectors
     float* A = malloc(N * N * sizeof(float));
     float* B = malloc(N * N * sizeof(float));
@@ -64,10 +65,10 @@ int main(int argc, char* argv[]) {
 
     // fill the vectors 
     for (int i = 0; i < N * N; i++) {
-        A[i] = (float)i;
-        B[i] = (float)i;
-        A_b[i] = (double)i;
-        B_b[i] = (double)i;    
+        A[i] = (float)i+1;
+        B[i] = (float)i+1;
+        A_b[i] = (double)i+1;
+        B_b[i] = (double)i+1;    
     }
 
     struct timespec tic, toc;
@@ -84,23 +85,26 @@ int main(int argc, char* argv[]) {
     print_matrix_double(C_b, N);
     printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
 
-    // print_matrix_float(A, N);
-    // print_matrix_float(B, N);
+    print_matrix_float(A, N);
+    print_matrix_float(B, N);
 
     vulkan_init(A, B, C, N, BLOCK_SIZE);
-    vulkan_submit_tile(0, 0, 0);
+    // vulkan_submit_tile(0, 0, 0);
+    // vulkan_submit_tile(offsetA(0,2), offsetB(0, 2), offsetC(0, 2));
 
-
-    // for (int i = 0; i < M; i += BLOCK_SIZE) {
-    //     for (int j = 0; j < N; j +=  BLOCK_SIZE) {
-    //         for (int p = 0; p < K; p +=  BLOCK_SIZE) {
-    //             printf("ith: %i, jth: %i, pth: %i loop\n", i , j, p);
-    //             // TODO add the offsets as input to the vulkan multiplication
-    //             vulkan_submit_tile(offsetA(i, p), offsetB(p, j), offsetC(i, j));
-    //         }
-    //     }
-    // }
-    printf("\noutput matrix after vulkan: ");
+    for (int i = 0; i < M; i += BLOCK_SIZE) {
+        for (int j = 0; j < N; j +=  BLOCK_SIZE) {
+            for (int p = 0; p < K; p +=  BLOCK_SIZE) {
+                printf("\nith: %i, jth: %i, pth: %i loop\n", i , j, p);
+                // TODO add the offsets as input to the vulkan multiplication
+                printf("A offset: (%i, %i), B offset: (%i, %i), C offset (%i, %i\n)", i, p, p, j, i, j);
+            //    printf("A offset: %i, B offset: %i, C offset %i\n",offsetA(i, p), offsetB(p, j), offsetC(i, j));
+                vulkan_submit_tile(i, p, p, j, i, j);
+               
+            }
+        }
+    }
+    printf("\noutput matrix after vulkan: \n");
     print_matrix_float(C, N);
     // free everything
     free(A); free(B); free(C);

@@ -19,11 +19,13 @@
 
 CommandLineParser commandLineParser;
 
-
 struct PushConstants {
-    uint32_t offsetA;
-    uint32_t offsetB;
-    uint32_t offsetC;
+    uint32_t offsetRowA;
+	uint32_t offsetColA;
+	uint32_t offsetRowB;
+	uint32_t offsetColB;
+	uint32_t offsetRowC;
+	uint32_t offsetColC;
 };
 
 class VulkanExample
@@ -384,7 +386,7 @@ public:
 		VkComputePipelineCreateInfo computePipelineCreateInfo = vks::initializers::computePipelineCreateInfo(pipelineLayout, 0);
 
 		// compute tile size according to the size of N
-		TILE = (N >= 16) ? 16 : 2;
+		TILE = (N >= 16) ? 16 : 1;
 		// Pass SSBO size via specialization constant
 		struct SpecializationData {
 			uint32_t MATRIX_SIZE;
@@ -563,19 +565,26 @@ public:
 
 		// Copy to output
 		float* fdata = static_cast<float*>(mapped);
-		for (int i = 0; i < 8; ++i) {
-			printf("mapped: %f\t", fdata[i]);
+		LOG("\nmapped: ");
+		for (int i = 0; i < 16; ++i) {
+			printf(": %f\t", fdata[i]);
 		}
+		LOG("\n--------------\nMatrix C before adding mapped: \n");
+		for (int i = 0; i < 16; ++i) {
+			printf(": %f\t", outC[i]);
+		}
+		LOG("\n\n");
 
 		//TODO fix the memcpy because the copying back does not necessarily mathc
-		memcpy(outC + pc.offsetC, mapped, N * N * sizeof(float));
+		memcpy(outC, mapped, ldN*ldN * sizeof(float));
+
 		vkUnmapMemory(device, hostMemoryC);
 
 		vkQueueWaitIdle(queue);
 		queryTimestamps();
 
-		LOG("output matrix inside vulkan:\n");
-		for (int i = 0; i < 4; ++i) {
+		LOG("\n--------------\nMatrix C AFTER adding mapped: \n");
+		for (int i = 0; i < 16; ++i) {
 			LOG("%f \t", outC[i]);
 		}
 
@@ -645,7 +654,7 @@ extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t
 
 
 
-extern "C" void vulkan_submit_tile(uint32_t offsetA, uint32_t offsetB, uint32_t offsetC){
+extern "C" void vulkan_submit_tile(uint32_t offsetRowA, uint32_t offsetColA, uint32_t offsetRowB, uint32_t offsetColB, uint32_t offsetRowC, uint32_t offsetColC){
 	if (!vkInstance) {
 		std::cerr << "Error: Vulkan has not been initialized!" << std::endl;
 	}
@@ -653,9 +662,12 @@ extern "C" void vulkan_submit_tile(uint32_t offsetA, uint32_t offsetB, uint32_t 
 	LOG("Submitting task to Compute Pipeline\n");
 
 	PushConstants pc = {
-        offsetA,
-        offsetB,
-        offsetC
+        offsetRowA,
+		offsetColA,
+		offsetRowB,
+		offsetColB,
+        offsetRowC,
+		offsetColC
     };
 	
 	vkInstance->submitComputeWork(pc);

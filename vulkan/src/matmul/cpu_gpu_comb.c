@@ -4,15 +4,16 @@
 #include "vulkan_matmul.h"
 #include <time.h>
 #include "utils.h"
-#define ldN 4
 
-// #define offsetA(i, p) A[(i) + (p)*ldN]
-// #define offsetB(p, j) B[(p) + (j)*ldN]
-// #define offsetC(i, j) C[(i) + (j)*ldN]
+#define offsetA(i, p, ldN) (i * ldN + p)
+#define offsetB(p, j, ldN) (p * ldN + j)
+#define offsetC(i, j, ldN) (i * ldN + j)
 
-#define offsetA(i, p) (i * ldN + p)
-#define offsetB(p, j) (p * ldN + j)
-#define offsetC(i, j) (i * ldN + j)
+typedef struct {
+    int i;
+    int j;
+    int p;
+} TileConfig;
 
 void blis_matmul(double* A, double* B, double* C, uint32_t N, uint32_t TILE){
     bli_init();
@@ -35,6 +36,23 @@ void blis_matmul(double* A, double* B, double* C, uint32_t N, uint32_t TILE){
     bli_gemm(&BLIS_ONE, &A_blis, &B_blis, &BLIS_ZERO, &C_blis);
 
     bli_finalize();
+}
+
+TileConfig* generate_all_tiles(int N, int TILE, int* num_tiles){
+    int max_tiles = (N / TILE) * (N / TILE) * (N / TILE);
+    TileConfig* tiles = malloc(max_tiles * sizeof(TileConfig));
+    int count = 0;
+
+    for (int i = 0; i < N; i += TILE) {
+        for (int j = 0; j < N; j += TILE) {
+            for (int k = 0; k < N; k += TILE) {
+                tiles[count++] = (TileConfig){i, j, k};
+            }
+        }
+    }
+
+    *num_tiles = count;
+    return tiles;
 }
 
 int main(int argc, char* argv[]) {
@@ -74,45 +92,43 @@ int main(int argc, char* argv[]) {
     struct timespec tic, toc;
     double elapsed;
 
-    printf("Calling BLIS GEMM with N = %d\n----------------\n", N);
-
-    clock_gettime(CLOCK_MONOTONIC, &tic);
-    blis_matmul(A_b, B_b, C_b, N, BLOCK_SIZE);
-    clock_gettime(CLOCK_MONOTONIC, &toc);
-
-    elapsed = (toc.tv_sec - tic.tv_sec) * 1000000000LL + (toc.tv_nsec - tic.tv_nsec);
-    // printf("Resulting Matrix: \n");
-    // print_matrix_double(C_b, N);
-    printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
-
-    // print_matrix_float(A, N);
-    // print_matrix_float(B, N);
-
+    int num_tiles = 0;
+    // points to an array of tiles
+    TileConfig* tiles = generate_all_tiles(N, BLOCK_SIZE, &num_tiles);
     vulkan_init(A, B, C, N, BLOCK_SIZE);
-    // vulkan_submit_tile(0, 0, 0);
-    // vulkan_submit_tile(offsetA(0,2), offsetB(0, 2), offsetC(0, 2));
+    bli_init(); 
 
-    for (int i = 0; i < M; i += BLOCK_SIZE) {
-        for (int j = 0; j < N; j +=  BLOCK_SIZE) {
-            for (int p = 0; p < K; p +=  BLOCK_SIZE) {
-                // printf("\nith: %i, jth: %i, pth: %i loop\n", i , j, p);
-                // TODO add the offsets as input to the vulkan multiplication
-                // printf("A offset: (%i, %i), B offset: (%i, %i), C offset (%i, %i\n)", i, p, p, j, i, j);
-            //    printf("A offset: %i, B offset: %i, C offset %i\n",offsetA(i, p), offsetB(p, j), offsetC(i, j));
-                vulkan_submit_tile(i, p, p, j, i, j);
-               
-            }
+    for (int idx = 0; idx < num_tiles; idx++) {
+        TileConfig tile = tiles[idx];
+        if (idx % 2 == 0) {
+            clock_gettime(CLOCK_MONOTONIC, &tic);
+
+            obj_t A_blis, B_blis, C_blis;
+
+            bli_obj_create_with_attached_buffer(BLIS_DOUBLE, BLOCK_SIZE, BLOCK_SIZE, A_b + offsetA(tile.i, tile.p, N), 1, N, &A_blis);
+            bli_obj_create_with_attached_buffer(BLIS_DOUBLE, BLOCK_SIZE, BLOCK_SIZE, B_b + offsetB(tile.p, tile.j, N), 1, N, &B_blis);
+            bli_obj_create_with_attached_buffer(BLIS_DOUBLE, BLOCK_SIZE, BLOCK_SIZE, C_b + offsetC(tile.i, tile.j, N), 1, N, &C_blis);
+            
+            
+            bli_gemm(&BLIS_ONE, &A_blis, &B_blis, &BLIS_ONE, &C_blis);
+
+            clock_gettime(CLOCK_MONOTONIC, &toc);
+            elapsed += (toc.tv_sec - tic.tv_sec) * 1000000000LL + (toc.tv_nsec - tic.tv_nsec);
+        }
+        else{
+            vulkan_submit_tile(tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
         }
     }
 
-    // printf("\noutput matrix after vulkan: \n");
-    // print_first_row_matrix_float(C, N);
-
+    printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
     vulkan_print_total_time();
+
     // free everything
     free(A); free(B); free(C);
     free(A_b); free(B_b); free(C_b); 
+
     vulkan_cleanup();
-    
+    bli_finalize();
+
     return 0;
 }

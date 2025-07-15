@@ -76,17 +76,10 @@ int main(int argc, char* argv[]) {
     float* B = malloc(N * N * sizeof(float));
     float* C = malloc(N * N * sizeof(float));
 
-    // initialise the blis double vectors
-    double* A_b = (double*)malloc(N * N * sizeof(double));
-	double* B_b = (double*)malloc(N * N * sizeof(double));
-	double* C_b = (double*)calloc(N * N,  sizeof(double));
-
     // fill the vectors 
     for (int i = 0; i < N * N; i++) {
         A[i] = (float)i+1;
         B[i] = (float)i+1;
-        A_b[i] = (double)i+1;
-        B_b[i] = (double)i+1;    
     }
 
     struct timespec tic, toc;
@@ -101,31 +94,39 @@ int main(int argc, char* argv[]) {
     for (int idx = 0; idx < num_tiles; idx++) {
         TileConfig tile = tiles[idx];
         if (idx % 2 == 0) {
+            printf("\n=============\ntile coordinates: A(%i, %i), B(%i, %i) , C(%i, %i)\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
             clock_gettime(CLOCK_MONOTONIC, &tic);
 
             obj_t A_blis, B_blis, C_blis;
 
-            bli_obj_create_with_attached_buffer(BLIS_DOUBLE, BLOCK_SIZE, BLOCK_SIZE, A_b + offsetA(tile.i, tile.p, N), 1, N, &A_blis);
-            bli_obj_create_with_attached_buffer(BLIS_DOUBLE, BLOCK_SIZE, BLOCK_SIZE, B_b + offsetB(tile.p, tile.j, N), 1, N, &B_blis);
-            bli_obj_create_with_attached_buffer(BLIS_DOUBLE, BLOCK_SIZE, BLOCK_SIZE, C_b + offsetC(tile.i, tile.j, N), 1, N, &C_blis);
+            bli_obj_create_with_attached_buffer(BLIS_FLOAT, BLOCK_SIZE, BLOCK_SIZE, A + offsetA(tile.i, tile.p, N), N, 1, &A_blis);
+            bli_obj_create_with_attached_buffer(BLIS_FLOAT, BLOCK_SIZE, BLOCK_SIZE, B + offsetB(tile.p, tile.j, N), N, 1, &B_blis);
+            bli_obj_create_with_attached_buffer(BLIS_FLOAT, BLOCK_SIZE, BLOCK_SIZE, C + offsetC(tile.i, tile.j, N), N, 1, &C_blis);
             
             
             bli_gemm(&BLIS_ONE, &A_blis, &B_blis, &BLIS_ONE, &C_blis);
 
             clock_gettime(CLOCK_MONOTONIC, &toc);
             elapsed += (toc.tv_sec - tic.tv_sec) * 1000000000LL + (toc.tv_nsec - tic.tv_nsec);
+            printf("\n idx : %i current matrix: \n", idx);
+            print_matrix_float(C, N);
         }
         else{
+            printf("\n=============\ntile coordinates: A(%i, %i), B(%i, %i) , C(%i, %i)\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
             vulkan_submit_tile(tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
+            printf("\n idx : %i current matrix: \n", idx);
+            print_matrix_float(C, N);
         }
     }
+
+    printf("Resulting Matrix: \n");
+    print_matrix_float(C, N);
 
     printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
     vulkan_print_total_time();
 
     // free everything
     free(A); free(B); free(C);
-    free(A_b); free(B_b); free(C_b); 
 
     vulkan_cleanup();
     bli_finalize();

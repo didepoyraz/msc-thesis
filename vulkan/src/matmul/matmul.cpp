@@ -437,144 +437,72 @@ public:
 		computePipelineCreateInfo.stage = shaderStage;
 		VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &pipeline));
 
-		// Create a command buffer for compute operations
-		VkCommandBufferAllocateInfo cmdBufAllocateInfo =
-			vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
-		VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &commandBuffer));
+		// // Create a command buffer for compute operations
+		// VkCommandBufferAllocateInfo cmdBufAllocateInfo =
+		// 	vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
+		// VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &commandBuffer));
 
-		// Fence for compute CB sync
-		VkFenceCreateInfo fenceCreateInfo = vks::initializers::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-		VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
+		// // Fence for compute CB sync
+		// VkFenceCreateInfo fenceCreateInfo = vks::initializers::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+		// VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
 	}
 
 	void submitComputeWork(const PushConstants& pc) {
+		// Allocate new command buffer
+		VkCommandBufferAllocateInfo cmdBufAllocateInfo = 
+			vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
+		VkCommandBuffer cmdBuf;
+		VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &cmdBuf));
 
 		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
-	
-		VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &cmdBufInfo));
+		VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuf, &cmdBufInfo));
 
-		vkCmdResetQueryPool(commandBuffer, queryPool, 0, 4);
+		vkCmdResetQueryPool(cmdBuf, queryPool, 0, 4);
+		vkCmdWriteTimestamp(cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPool, 0);
 
-		vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPool, 0);
+		// Bind compute pipeline and descriptor set
+		vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+		vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
-		// Barrier to ensure that input buffer transfer is finished before compute shader reads from it
-		// VkBufferMemoryBarrier bufferBarrier = vks::initializers::bufferMemoryBarrier();
-		// Barrier to ensure that input buffers' transfer is finished before compute shader reads from them
-		// update to 2 barriers for matrix A & matrix B
-		VkBufferMemoryBarrier bufferBarriers[2] = {
-			vks::initializers::bufferMemoryBarrier(),
-			vks::initializers::bufferMemoryBarrier(),
-		};
+		// Push constants
+		vkCmdPushConstants(cmdBuf, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstants), &pc);
 
-		// 1st barrier for deviceBufferA
-		bufferBarriers[0].buffer = deviceBufferA;
-		bufferBarriers[0].size = VK_WHOLE_SIZE;
-		bufferBarriers[0].srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-		bufferBarriers[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		bufferBarriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		bufferBarriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		// 2nd for deviceBufferB
-		bufferBarriers[1].buffer = deviceBufferB;
-		bufferBarriers[1].size = VK_WHOLE_SIZE;
-		bufferBarriers[1].srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-		bufferBarriers[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		bufferBarriers[1].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		bufferBarriers[1].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		vkCmdWriteTimestamp(cmdBuf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, queryPool, 1);
+		vkCmdDispatch(cmdBuf, N / TILE, N / TILE, 1);
+		vkCmdWriteTimestamp(cmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, queryPool, 2);
 
-		vkCmdPipelineBarrier(
-			commandBuffer,
-			VK_PIPELINE_STAGE_HOST_BIT,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-			VK_FLAGS_NONE,
-			0, nullptr,
-			2, bufferBarriers,
-			0, nullptr);
-
-		// bind piplines and descriptor sets
-		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, 0);
-
-		// vkCmdBeginQuery(commandBuffer, queryPool_mem, 0, 0); //another query pool for perf @ begin query
-
-		vkCmdPushConstants( commandBuffer, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstants),&pc);       
-
-		vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPool, 1);
-		// dispatch shader (2D, x=y=N, z=1)
-		// LOG("\nN: %i, TILE: %i\n", N, TILE);
-		vkCmdDispatch(commandBuffer, N/TILE, N/TILE, 1);
-		// vkCmdDispatch(commandBuffer, N, N, 1);
-
-		// Barrier to ensure that shader writes are finished before buffer is read back from GPU
-		VkBufferMemoryBarrier outputBarrier = vks::initializers::bufferMemoryBarrier();
-		outputBarrier.buffer = deviceBufferC; // use BufferC for writing back
-		outputBarrier.size = VK_WHOLE_SIZE;
-		outputBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-		outputBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-		outputBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		outputBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-
-		vkCmdPipelineBarrier(
-			commandBuffer,
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_FLAGS_NONE,
-			0, nullptr,
-			1, &outputBarrier,
-			0, nullptr);
-
-		vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool, 2);
-
-		// vkCmdEndQuery(commandBuffer, queryPool_mem, 0); // perf @ end query
-
-		// Read back to host visible buffer
+		// Copy back to host
 		VkBufferCopy copyRegion = {};
 		copyRegion.size = bufferSize;
-		vkCmdCopyBuffer(commandBuffer, deviceBufferC, hostBufferC, 1, &copyRegion);
+		vkCmdCopyBuffer(cmdBuf, deviceBufferC, hostBufferC, 1, &copyRegion);
 
-		// Barrier to ensure that buffer copy is finished before host reading from it
-		// reuse and reset the barrier
-		outputBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		outputBarrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
-		outputBarrier.buffer = hostBufferC;
-		outputBarrier.size = VK_WHOLE_SIZE;
-		outputBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		outputBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		// Final timestamp
+		vkCmdWriteTimestamp(cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool, 3);
 
-		vkCmdPipelineBarrier(
-			commandBuffer,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,
-			VK_PIPELINE_STAGE_HOST_BIT,
-			VK_FLAGS_NONE,
-			0, nullptr,
-			1, &outputBarrier,
-			0, nullptr);
+		VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuf));
 
-		vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool, 3);
+		// Submit
+		VkFence computeFence;
+		VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo();
+		VK_CHECK_RESULT(vkCreateFence(device, &fenceInfo, nullptr, &computeFence));
 
-		VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
+		VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &cmdBuf;
+		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, computeFence));
+		VK_CHECK_RESULT(vkWaitForFences(device, 1, &computeFence, VK_TRUE, UINT64_MAX));
+		vkDestroyFence(device, computeFence, nullptr);
 
-		// Submit compute work
-		vkResetFences(device, 1, &fence);
-		// wait for at least buffer transfer happened
-		const VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		VkSubmitInfo computeSubmitInfo = vks::initializers::submitInfo();
-		computeSubmitInfo.pWaitDstStageMask = &waitStageMask;
-		computeSubmitInfo.commandBufferCount = 1;
-		computeSubmitInfo.pCommandBuffers = &commandBuffer;
-		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &computeSubmitInfo, fence));
-		VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
-
-		// Make device writes visible to the host
-		void *mapped;
+		// Copy from mapped to C matrix
+		void* mapped;
 		vkMapMemory(device, hostMemoryC, 0, VK_WHOLE_SIZE, 0, &mapped);
 		VkMappedMemoryRange mappedRange = vks::initializers::mappedMemoryRange();
 		mappedRange.memory = hostMemoryC;
 		mappedRange.offset = 0;
 		mappedRange.size = VK_WHOLE_SIZE;
 		vkInvalidateMappedMemoryRanges(device, 1, &mappedRange);
+		float* fdata = static_cast<float*>(mapped);
 
-		// Copy to output
-		// float* fdata = static_cast<float*>(mapped);
 		// LOG("\nmapped: ");
 		// for (int i = 0; i < 16; ++i) {
 		// 	printf(": %f\t", fdata[i]);
@@ -585,20 +513,24 @@ public:
 		// }
 		// LOG("\n\n");
 
-		//TODO fix the memcpy because the copying back does not necessarily mathc
-		memcpy(outC, mapped, ldN*ldN * sizeof(float));
+		for (int r = 0; r < N; ++r) {
+			for (int c = 0; c < N; ++c) {
+				int idx = (pc.offsetRowC + r) * ldN + (pc.offsetColC + c);
+				outC[idx] += ((float*)mapped)[idx];
+			}
+		}
+
+		//TODO: you need to flush it to the GPU otherwise this is not going to be
+		// set to 0 when you only do memset.
+		memset(mapped, 0, ldN * ldN * sizeof(float));
 
 		vkUnmapMemory(device, hostMemoryC);
 
-		vkQueueWaitIdle(queue);
+		// Cleanup
+		vkFreeCommandBuffers(device, commandPool, 1, &cmdBuf);
 		queryTimestamps();
-
-		// LOG("\n--------------\nMatrix C AFTER adding mapped: \n");
-		// for (int i = 0; i < 16; ++i) {
-		// 	LOG("%f \t", outC[i]);
-		// }
-
 	}
+
 
 	void printTotalExecutionTime() const {
 	std::cout << "\n===== Vulkan Timing Summary Across All Tiles =====\n";
@@ -687,7 +619,7 @@ extern "C" void vulkan_submit_tile(uint32_t offsetRowA, uint32_t offsetColA, uin
         offsetRowC,
 		offsetColC
     };
-	
+	printf("Submitting tile A(%d,%d) B(%d,%d) C(%d,%d)\n", pc.offsetRowA, pc.offsetColA, pc.offsetRowB, pc.offsetColB, pc.offsetRowC, pc.offsetColC);
 	vkInstance->submitComputeWork(pc);
 }
 

@@ -13,11 +13,20 @@ typedef struct {
 } TileConfig;
 
 typedef struct {
+    float* A;
+    float* B;
+    float* C;
+    int N;
+    int BLOCK_SIZE;
+} Mult;
+
+typedef struct {
     TileConfig buffer[1024];
     int head, tail, size;
     bool done;
     pthread_mutex_t lock;
     pthread_cond_t not_empty;
+    Mult matrix;
 } TileQueue;
 
 bool enqueue_tile(TileQueue* q, TileConfig tile);

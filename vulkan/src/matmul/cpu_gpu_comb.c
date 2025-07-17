@@ -12,60 +12,20 @@
 #define offsetC(i, j, ldN) (i * ldN + j)
 #define NUM_THREADS 3
 
-typedef struct {
-    int i;
-    int j;
-    int p;
-} TileConfig;
+void* cpu_worker(void* arg){
+    TileQueue* q = (TileQueue*) arg;
+    TileConfig tile;
 
-void blis_matmul(double* A, double* B, double* C, uint32_t N, uint32_t TILE){
-    bli_init();
+    while(dequeue_tile(q, &tile)) {
+         obj_t A_blis, B_blis, C_blis;
 
-    if (!A || !B || !C) {
-        fprintf(stderr, "Memory allocation failed\n");
-        exit(EXIT_FAILURE);
+        bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.A + offsetA(tile.i, tile.p, q->matrix.N), q->matrix.N, 1, &A_blis);
+        bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.B + offsetB(tile.p, tile.j, q->matrix.N), q->matrix.N, 1, &B_blis);
+        bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.C + offsetC(tile.i, tile.j, q->matrix.N), q->matrix.N, 1, &C_blis);
+        
+        bli_gemm(&BLIS_ONE, &A_blis, &B_blis, &BLIS_ONE, &C_blis);
     }
-
-    obj_t A_blis, B_blis, C_blis;
-
-    uint32_t M = N;
-    uint32_t K = N;
-
-	bli_obj_create_with_attached_buffer(BLIS_DOUBLE, M, K, A, 1, K, &A_blis);
-	bli_obj_create_with_attached_buffer(BLIS_DOUBLE, K, N, B, 1, N, &B_blis);
-	bli_obj_create_with_attached_buffer(BLIS_DOUBLE, M, N, C, 1, N, &C_blis);
-
-	
-    bli_gemm(&BLIS_ONE, &A_blis, &B_blis, &BLIS_ZERO, &C_blis);
-
-    bli_finalize();
-}
-
-TileConfig* generate_all_tiles(int N, int TILE, int* num_tiles){
-    int max_tiles = (N / TILE) * (N / TILE) * (N / TILE);
-    TileConfig* tiles = malloc(max_tiles * sizeof(TileConfig));
-    int count = 0;
-
-    for (int i = 0; i < N; i += TILE) {
-        for (int j = 0; j < N; j += TILE) {
-            for (int k = 0; k < N; k += TILE) {
-                if(idx % 2 == 0){
-
-                }
-                else{
-
-                }
-                tiles[count++] = (TileConfig){i, j, k};
-            }
-        }
-    }
-
-    *num_tiles = count;
-    return tiles;
-}
-
-void cpu_worker(TileQueue* q){
-
+    return NULL;
 }
 
 int main(int argc, char* argv[]) {
@@ -84,6 +44,12 @@ int main(int argc, char* argv[]) {
         BLOCK_SIZE = atoi(argv[2]);
     }
     // int ldN = N;
+ 
+    double elapsed_full_execution = 0;
+    struct timespec start, end;
+
+    struct timespec tic, toc;
+    double elapsed;
     
     // initialise the gpu float vectors
     float* A = malloc(N * N * sizeof(float));
@@ -96,22 +62,16 @@ int main(int argc, char* argv[]) {
         B[i] = (float)i+1;
     }
 
-    double elapsed_full_execution = 0;
-    struct timespec start, end;
-
-    struct timespec tic, toc;
-    double elapsed;
-
-    int num_tiles = 0;
-
-    TileQueue queue = { .head = 0, .tail = 0, .size = 0, .done = false };
+    Mult matrix = {.A = A, .B = B, .C = C, .N = N, .BLOCK_SIZE = BLOCK_SIZE};
+    TileQueue queue = { .head = 0, .tail = 0, .size = 0, .done = false, .matrix = matrix};
+    
     pthread_mutex_init(&queue.lock, NULL);
     pthread_cond_init(&queue.not_empty, NULL);
 
     clock_gettime(CLOCK_MONOTONIC, &start);
 
-    // points to an array of tiles
-    // TileConfig* tiles = generate_all_tiles(N, BLOCK_SIZE, &num_tiles);
+    vulkan_init(A, B, C, N, BLOCK_SIZE);
+    bli_init(); 
 
     pthread_t threads[NUM_THREADS];
     for(int i = 0; i < NUM_THREADS; i++) {
@@ -131,11 +91,16 @@ int main(int argc, char* argv[]) {
             }
         }
     }
-    vulkan_init(A, B, C, N, BLOCK_SIZE);
-    bli_init(); 
+
+    pthread_mutex_lock(&queue.lock);
+    queue.done = true;
+    pthread_cond_broadcast(&queue.not_empty);
+    pthread_mutex_unlock(&queue.lock);
     // printf("BLIS default threads: %d\n", bli_thread_get_num_threads());
 
-
+    for (int i = 0; i < NUM_THREADS; i++){
+        pthread_join(threads[i], NULL);
+    }
 
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed_full_execution = (end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);

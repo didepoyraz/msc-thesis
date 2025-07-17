@@ -609,7 +609,7 @@ extern "C" void vulkan_submit_tile(uint32_t offsetRowA, uint32_t offsetColA, uin
 		std::cerr << "Error: Vulkan has not been initialized!" << std::endl;
 	}
 
-	LOG("Submitting task to Compute Pipeline\n");
+	// LOG("Submitting task to Compute Pipeline\n");
 
 	PushConstants pc = {
         offsetRowA,
@@ -619,7 +619,7 @@ extern "C" void vulkan_submit_tile(uint32_t offsetRowA, uint32_t offsetColA, uin
         offsetRowC,
 		offsetColC
     };
-	printf("Submitting tile A(%d,%d) B(%d,%d) C(%d,%d)\n", pc.offsetRowA, pc.offsetColA, pc.offsetRowB, pc.offsetColB, pc.offsetRowC, pc.offsetColC);
+	// printf("Submitting tile A(%d,%d) B(%d,%d) C(%d,%d)\n", pc.offsetRowA, pc.offsetColA, pc.offsetRowB, pc.offsetColB, pc.offsetRowC, pc.offsetColC);
 	vkInstance->submitComputeWork(pc);
 }
 

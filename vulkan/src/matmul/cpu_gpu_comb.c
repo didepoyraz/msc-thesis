@@ -56,6 +56,7 @@ TileConfig* generate_all_tiles(int N, int TILE, int* num_tiles){
 }
 
 int main(int argc, char* argv[]) {
+
     int M = 1024;
     int N = 1024;
     int K = 1024;
@@ -81,10 +82,13 @@ int main(int argc, char* argv[]) {
         A[i] = (float)i+1;
         B[i] = (float)i+1;
     }
+    double elapsed_full_execution = 0;
+    struct timespec start, end;
 
     struct timespec tic, toc;
     double elapsed;
 
+    clock_gettime(CLOCK_MONOTONIC, &start);
     int num_tiles = 0;
     // points to an array of tiles
     TileConfig* tiles = generate_all_tiles(N, BLOCK_SIZE, &num_tiles);
@@ -93,8 +97,8 @@ int main(int argc, char* argv[]) {
 
     for (int idx = 0; idx < num_tiles; idx++) {
         TileConfig tile = tiles[idx];
-        if (idx % 2 == 0) {
-            printf("\n=============\ntile coordinates: A(%i, %i), B(%i, %i) , C(%i, %i)\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
+        if (idx % 2 == 0) { // TODO: do a byte check if last bit is zero it is an even number
+            // printf("\n=============\ntile coordinates: A(%i, %i), B(%i, %i) , C(%i, %i)\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
             clock_gettime(CLOCK_MONOTONIC, &tic);
 
             obj_t A_blis, B_blis, C_blis;
@@ -108,19 +112,22 @@ int main(int argc, char* argv[]) {
 
             clock_gettime(CLOCK_MONOTONIC, &toc);
             elapsed += (toc.tv_sec - tic.tv_sec) * 1000000000LL + (toc.tv_nsec - tic.tv_nsec);
-            printf("\n idx : %i current matrix: \n", idx);
-            print_matrix_float(C, N);
+            // printf("\n idx : %i current matrix: \n", idx);
+            // print_matrix_float(C, N);
         }
         else{
-            printf("\n=============\ntile coordinates: A(%i, %i), B(%i, %i) , C(%i, %i)\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
+            // printf("\n=============\ntile coordinates: A(%i, %i), B(%i, %i) , C(%i, %i)\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
             vulkan_submit_tile(tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-            printf("\n idx : %i current matrix: \n", idx);
-            print_matrix_float(C, N);
+            // printf("\n idx : %i current matrix: \n", idx);
+            // print_matrix_float(C, N);
         }
-    }
+    }   
 
-    printf("Resulting Matrix: \n");
-    print_matrix_float(C, N);
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    elapsed_full_execution = (end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);
+    printf("Total Compute Time: %f ns \n", elapsed_full_execution);
+    // printf("Resulting Matrix: \n");
+    // print_first_row_matrix_float(C, N);
 
     printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
     vulkan_print_total_time();

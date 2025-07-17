@@ -4,10 +4,13 @@
 #include "vulkan_matmul.h"
 #include <time.h>
 #include "utils.h"
+#include "tile_queue.h"
+#include <pthread.h>
 
 #define offsetA(i, p, ldN) (i * ldN + p)
 #define offsetB(p, j, ldN) (p * ldN + j)
 #define offsetC(i, j, ldN) (i * ldN + j)
+#define NUM_THREADS 3
 
 typedef struct {
     int i;
@@ -46,6 +49,12 @@ TileConfig* generate_all_tiles(int N, int TILE, int* num_tiles){
     for (int i = 0; i < N; i += TILE) {
         for (int j = 0; j < N; j += TILE) {
             for (int k = 0; k < N; k += TILE) {
+                if(idx % 2 == 0){
+
+                }
+                else{
+
+                }
                 tiles[count++] = (TileConfig){i, j, k};
             }
         }
@@ -53,6 +62,10 @@ TileConfig* generate_all_tiles(int N, int TILE, int* num_tiles){
 
     *num_tiles = count;
     return tiles;
+}
+
+void cpu_worker(TileQueue* q){
+
 }
 
 int main(int argc, char* argv[]) {
@@ -82,47 +95,47 @@ int main(int argc, char* argv[]) {
         A[i] = (float)i+1;
         B[i] = (float)i+1;
     }
+
     double elapsed_full_execution = 0;
     struct timespec start, end;
 
     struct timespec tic, toc;
     double elapsed;
 
-    clock_gettime(CLOCK_MONOTONIC, &start);
     int num_tiles = 0;
+
+    TileQueue queue = { .head = 0, .tail = 0, .size = 0, .done = false };
+    pthread_mutex_init(&queue.lock, NULL);
+    pthread_cond_init(&queue.not_empty, NULL);
+
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
     // points to an array of tiles
-    TileConfig* tiles = generate_all_tiles(N, BLOCK_SIZE, &num_tiles);
+    // TileConfig* tiles = generate_all_tiles(N, BLOCK_SIZE, &num_tiles);
+
+    pthread_t threads[NUM_THREADS];
+    for(int i = 0; i < NUM_THREADS; i++) {
+        pthread_create(&threads[i], NULL, cpu_worker, &queue);
+    }
+
+    for (int i = 0; i < N; i += BLOCK_SIZE) {
+        for (int j = 0; j < N; j += BLOCK_SIZE) {
+            for (int k = 0; k < N; k += BLOCK_SIZE) {
+                TileConfig tile = {i, j, k};
+                if((i + j+ k) % 2 == 0){
+                    enqueue_tile(&queue, tile);
+                }
+                else{
+                    vulkan_submit_tile(tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
+                }
+            }
+        }
+    }
     vulkan_init(A, B, C, N, BLOCK_SIZE);
     bli_init(); 
     // printf("BLIS default threads: %d\n", bli_thread_get_num_threads());
 
-    for (int idx = 0; idx < num_tiles; idx++) {
-        TileConfig tile = tiles[idx];
-        if (idx % 2 == 0) { // TODO: do a byte check if last bit is zero it is an even number
-            // printf("\n=============\ntile coordinates: A(%i, %i), B(%i, %i) , C(%i, %i)\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-            clock_gettime(CLOCK_MONOTONIC, &tic);
 
-            obj_t A_blis, B_blis, C_blis;
-
-            bli_obj_create_with_attached_buffer(BLIS_FLOAT, BLOCK_SIZE, BLOCK_SIZE, A + offsetA(tile.i, tile.p, N), N, 1, &A_blis);
-            bli_obj_create_with_attached_buffer(BLIS_FLOAT, BLOCK_SIZE, BLOCK_SIZE, B + offsetB(tile.p, tile.j, N), N, 1, &B_blis);
-            bli_obj_create_with_attached_buffer(BLIS_FLOAT, BLOCK_SIZE, BLOCK_SIZE, C + offsetC(tile.i, tile.j, N), N, 1, &C_blis);
-            
-            
-            bli_gemm(&BLIS_ONE, &A_blis, &B_blis, &BLIS_ONE, &C_blis);
-
-            clock_gettime(CLOCK_MONOTONIC, &toc);
-            elapsed += (toc.tv_sec - tic.tv_sec) * 1000000000LL + (toc.tv_nsec - tic.tv_nsec);
-            // printf("\n idx : %i current matrix: \n", idx);
-            // print_matrix_float(C, N);
-        }
-        else{
-            // printf("\n=============\ntile coordinates: A(%i, %i), B(%i, %i) , C(%i, %i)\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-            vulkan_submit_tile(tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-            // printf("\n idx : %i current matrix: \n", idx);
-            // print_matrix_float(C, N);
-        }
-    }   
 
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed_full_execution = (end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);

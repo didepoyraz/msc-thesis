@@ -94,6 +94,7 @@ int main(int argc, char* argv[]) {
     TileConfig* tiles = generate_all_tiles(N, BLOCK_SIZE, &num_tiles);
     vulkan_init(A, B, C, N, BLOCK_SIZE);
     bli_init(); 
+    // printf("BLIS default threads: %d\n", bli_thread_get_num_threads());
 
     for (int idx = 0; idx < num_tiles; idx++) {
         TileConfig tile = tiles[idx];

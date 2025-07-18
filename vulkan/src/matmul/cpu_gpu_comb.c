@@ -7,10 +7,14 @@
 #include "tile_queue.h"
 #include <pthread.h>
 
+int cpu_counter = 0;
+int gpu_counter = 0;
+
 #define DEBUG_MODE 0
 
+
 #if DEBUG_MODE 
-    #define DEBUG_PRINT(...) prinft(__VA_ARGS__)
+    #define DEBUG_PRINT(...) printf(__VA_ARGS__)
 #else 
     # define DEBUG_PRINT(...) do {} while (0)
 #endif
@@ -28,11 +32,27 @@ void* cpu_worker(void* arg){
     while(dequeue_tile(q, &tile)) {
         obj_t A_blis, B_blis, C_blis;
         
+        DEBUG_PRINT("\n***** CPU is submitting tile: A(%i, %i), B(%i, %i), C(%i, %i) *****\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
+        
         bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.A + offsetA(tile.i, tile.p, q->matrix.N), q->matrix.N, 1, &A_blis);
         bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.B + offsetB(tile.p, tile.j, q->matrix.N), q->matrix.N, 1, &B_blis);
         bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.C + offsetC(tile.i, tile.j, q->matrix.N), q->matrix.N, 1, &C_blis);
         
         bli_gemm(&BLIS_ONE, &A_blis, &B_blis, &BLIS_ONE, &C_blis);
+        cpu_counter++;
+    }
+    return NULL;
+}
+
+void* gpu_worker(void* arg){
+    TileQueue* q = (TileQueue*) arg;
+    TileConfig tile;
+    DEBUG_PRINT("\nGPU thread starting up!");
+
+    while(dequeue_tile(q, &tile)) {
+        DEBUG_PRINT("\n++++ GPU is submitting tile: A(%i, %i), B(%i, %i), C(%i, %i) ++++\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
+        vulkan_submit_tile(tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
+        gpu_counter++;
     }
     return NULL;
 }
@@ -84,10 +104,16 @@ int main(int argc, char* argv[]) {
 
     DEBUG_PRINT("initialising threads!\n");
 
+    
     pthread_t threads[NUM_THREADS];
-    for(int i = 0; i < NUM_THREADS; i++) {
+
+    // CPU threads
+    for(int i = 0; i < (NUM_THREADS - 1); i++) {
         pthread_create(&threads[i], NULL, cpu_worker, &queue);
     }
+    // GPU thread
+    pthread_create(&threads[NUM_THREADS-1], NULL, gpu_worker, &queue);
+
     int cpu_gpu_ratio = 6;  
     int count = 0;  
 
@@ -99,16 +125,7 @@ int main(int argc, char* argv[]) {
                 TileConfig tile = {i, j, k};
                 // DEBUG_PRINT("\n\n-----submitting tile: (%d, %d, %d)-------\n", tile.i, tile.j, tile.p);
                 DEBUG_PRINT("\n======= submitting tile: A(%i, %i), B(%i, %i), C(%i, %i) =======\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-
-                if((count % (cpu_gpu_ratio + 1)) < cpu_gpu_ratio){
-                    //TODO: add error checking here
                     enqueue_tile(&queue, tile);
-                }
-                else{
-                    DEBUG_PRINT("\nsubmitting to vulkan!\n");
-                    vulkan_submit_tile(tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-                }
-                count++;
             }
         }
     }
@@ -126,6 +143,7 @@ int main(int argc, char* argv[]) {
     clock_gettime(CLOCK_MONOTONIC, &end);
     elapsed_full_execution = (end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);
     printf("Total Compute Time: %f ns \n", elapsed_full_execution);
+    printf("GPU has completed %i tiles and the CPU has completed %i tiles.\n", gpu_counter, cpu_counter);
     // printf("Resulting Matrix: \n");
     // print_first_row_matrix_float(C, N);
     printf("matrix c first element %f, last element %f", C[0], C[(N*N)-1]);

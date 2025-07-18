@@ -18,7 +18,7 @@
 #define offsetA(i, p, ldN) (i * ldN + p)
 #define offsetB(p, j, ldN) (p * ldN + j)
 #define offsetC(i, j, ldN) (i * ldN + j)
-#define NUM_THREADS 3
+#define NUM_THREADS 4
 
 void* cpu_worker(void* arg){
     TileQueue* q = (TileQueue*) arg;
@@ -101,6 +101,7 @@ int main(int argc, char* argv[]) {
                 DEBUG_PRINT("\n======= submitting tile: A(%i, %i), B(%i, %i), C(%i, %i) =======\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
 
                 if((count % (cpu_gpu_ratio + 1)) < cpu_gpu_ratio){
+                    //TODO: add error checking here
                     enqueue_tile(&queue, tile);
                 }
                 else{

@@ -15,9 +15,15 @@ bool enqueue_tile(TileQueue* q, TileConfig tile){
     
     pthread_mutex_lock(&q->lock);
 
-    while(q->size == TILE_QUEUE_CAPACITY){
-        // TODO: busy wait here maybe
+    while(q->size == TILE_QUEUE_CAPACITY && !q->done){
+        // TODO: I made this but i was tired I didn't thoroughly think about race conditions please look at it again
+        pthread_cond_wait(&q->capacity_available, &q->lock);
         DEBUG_PRINT("\nQueue size is at maximum capacity!");
+    }
+
+    if (q->done) {
+        pthread_mutex_unlock(&q->lock);
+        return false;
     }
 
     q->buffer[q->tail] = tile;
@@ -52,6 +58,8 @@ bool dequeue_tile(TileQueue* q, TileConfig* tile){
     *tile = q->buffer[q->head]; // dereference it so it saves it to the actual tile variables address
     q->head = (q->head + 1) % TILE_QUEUE_CAPACITY;
     q->size--;
+
+    pthread_cond_broadcast(&q->capacity_available); 
     pthread_mutex_unlock(&q->lock);
 
     return true;

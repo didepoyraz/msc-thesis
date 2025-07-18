@@ -26,6 +26,7 @@ typedef struct {
     bool done;
     pthread_mutex_t lock;
     pthread_cond_t not_empty;
+    pthread_cond_t capacity_available;
     Mult matrix;
 } TileQueue;
 

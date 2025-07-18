@@ -5,7 +5,7 @@
 #include <time.h>
 #include "utils.h"
 
-void blis_matmul(double* A, double* B, double* C, uint32_t N, uint32_t TILE){
+void blis_matmul(float* A, float* B, float* C, uint32_t N, uint32_t TILE){
     bli_init();
 
     if (!A || !B || !C) {
@@ -18,9 +18,9 @@ void blis_matmul(double* A, double* B, double* C, uint32_t N, uint32_t TILE){
     uint32_t M = N;
     uint32_t K = N;
 
-	bli_obj_create_with_attached_buffer(BLIS_DOUBLE, M, K, A, 1, K, &A_blis);
-	bli_obj_create_with_attached_buffer(BLIS_DOUBLE, K, N, B, 1, N, &B_blis);
-	bli_obj_create_with_attached_buffer(BLIS_DOUBLE, M, N, C, 1, N, &C_blis);
+	bli_obj_create_with_attached_buffer(BLIS_FLOAT, M, K, A, 1, K, &A_blis);
+	bli_obj_create_with_attached_buffer(BLIS_FLOAT, K, N, B, 1, N, &B_blis);
+	bli_obj_create_with_attached_buffer(BLIS_FLOAT, M, N, C, 1, N, &C_blis);
 
 	
     bli_gemm(&BLIS_ONE, &A_blis, &B_blis, &BLIS_ZERO, &C_blis);
@@ -61,14 +61,14 @@ int main(int argc, char* argv[]) {
     printf("Calling BLIS GEMM with N = %d\n----------------\n", N);
 
     clock_gettime(CLOCK_MONOTONIC, &tic);
-    blis_matmul(A_b, B_b, C_b, N, TILE);
+    blis_matmul(A, B, C, N, TILE);
     clock_gettime(CLOCK_MONOTONIC, &toc);
 
     elapsed = (toc.tv_sec - tic.tv_sec) * 1000000000LL + (toc.tv_nsec - tic.tv_nsec);
     
     printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
 
-    vulkan_matmul(A, B, C, N, TILE);
+    // vulkan_matmul(A, B, C, N, TILE);
 
     // print_matrix_double(C_b, N);
 

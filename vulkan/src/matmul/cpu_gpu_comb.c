@@ -18,7 +18,7 @@
 #define offsetA(i, p, ldN) (i * ldN + p)
 #define offsetB(p, j, ldN) (p * ldN + j)
 #define offsetC(i, j, ldN) (i * ldN + j)
-#define NUM_THREADS 3
+#define NUM_THREADS 4
 
 void* cpu_worker(void* arg){
     TileQueue* q = (TileQueue*) arg;
@@ -79,7 +79,7 @@ int main(int argc, char* argv[]) {
 
     clock_gettime(CLOCK_MONOTONIC, &start);
 
-    vulkan_init(A, B, C, N, BLOCK_SIZE);
+    // vulkan_init(A, B, C, N, BLOCK_SIZE);
     bli_init(); 
 
     DEBUG_PRINT("initialising threads!\n");
@@ -99,15 +99,7 @@ int main(int argc, char* argv[]) {
                 TileConfig tile = {i, j, k};
                 // DEBUG_PRINT("\n\n-----submitting tile: (%d, %d, %d)-------\n", tile.i, tile.j, tile.p);
                 DEBUG_PRINT("\n======= submitting tile: A(%i, %i), B(%i, %i), C(%i, %i) =======\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-
-                if((count % (cpu_gpu_ratio + 1)) < cpu_gpu_ratio){
-                    enqueue_tile(&queue, tile);
-                }
-                else{
-                    DEBUG_PRINT("\nsubmitting to vulkan!\n");
-                    vulkan_submit_tile(tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-                }
-                count++;
+                enqueue_tile(&queue, tile);
             }
         }
     }
@@ -129,12 +121,12 @@ int main(int argc, char* argv[]) {
     // print_first_row_matrix_float(C, N);
     printf("matrix c first element %f, last element %f", C[0], C[(N*N)-1]);
     // printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
-    vulkan_print_total_time();
+    // vulkan_print_total_time();
 
     // free everything
     free(A); free(B); free(C);
 
-    vulkan_cleanup();
+    // vulkan_cleanup();
     bli_finalize();
 
     return 0;

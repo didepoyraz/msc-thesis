@@ -86,7 +86,13 @@ void main() {
 
     // Store the full result in the output matrix, each thread saves its own respective result
      if (outputRow < leadingDimensionN && outputCol < leadingDimensionN) {
-        output_dataC[outputRow * leadingDimensionN + outputCol] += result;
+        
+        // if the resulting matrix is being accumulated in a shared buffer 
+        // outside of vulan do "=" if there is no shared buffer outside of 
+        // vulkan and the program is calculating partial dot products in 
+        // seperate command buffer do "+="
+        
+        output_dataC[outputRow * leadingDimensionN + outputCol] = result;
     }
 
 }

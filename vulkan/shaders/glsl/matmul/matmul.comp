@@ -18,8 +18,8 @@ layout (local_size_x_id = 1, local_size_y_id = 2, local_size_z = 1) in;
 layout (constant_id = 0) const uint MATRIX_SIZE = 1024;
 layout (constant_id = 1) const uint TILE_SIZE = 16; 
 
-shared float tileA[TILE_SIZE][TILE_SIZE];
-shared float tileB[TILE_SIZE][TILE_SIZE];
+shared vec4 tileA[TILE_SIZE][TILE_SIZE / 4];
+shared vec4 tileB[TILE_SIZE][TILE_SIZE / 4];
 
 void main() {
     // global position in the matrix
@@ -29,6 +29,9 @@ void main() {
     // local position within the workgroup
     uint localRow = gl_LocalInvocationID.y;
     uint localCol = gl_LocalInvocationID.x;
+
+    uint vec4Col = localCol / 4;
+    
 
     // Bounds check
     if (row >= MATRIX_SIZE || col >= MATRIX_SIZE) {
@@ -55,16 +58,42 @@ void main() {
          // tileA stores a horizontal slice (row-major) of A
          // tileB stores a vertical slice (column-major) of B
 
-        tileA[localRow][localCol] = dataA[row * MATRIX_SIZE + (k + localCol)];  
-        tileB[localRow][localCol] = dataB[( k + localRow) * MATRIX_SIZE + col];
+        // tileA[localRow][localCol] = dataA[row * MATRIX_SIZE + (k + localCol)];  
+        // tileB[localRow][localCol] = dataB[( k + localRow) * MATRIX_SIZE + col];
+
+        if ((localCol % 4) == 0) {
+            // Load 4 floats from A row-wise
+            tileA[localRow][vec4Col] = vec4(
+                dataA[row * MATRIX_SIZE + (k + localCol + 0)],
+                dataA[row * MATRIX_SIZE + (k + localCol + 1)],
+                dataA[row * MATRIX_SIZE + (k + localCol + 2)],
+                dataA[row * MATRIX_SIZE + (k + localCol + 3)]
+            );
+
+            // Load 4 floats from B column-wise
+            tileB[localRow][vec4Col] = vec4(
+                dataB[(k + localRow + 0) * MATRIX_SIZE + col],
+                dataB[(k + localRow + 1) * MATRIX_SIZE + col],
+                dataB[(k + localRow + 2) * MATRIX_SIZE + col],
+                dataB[(k + localRow + 3) * MATRIX_SIZE + col]
+            );
+        }
 
         // Synchronize all threads in the workgroup for the tile to be completed
         barrier();
 
         // Compute partial dot product for this tile
-        for (uint t = 0; t < TILE_SIZE; t++) {
-            result += tileA[localRow][t] * tileB[t][localCol];
-        }
+        // for (uint t = 0; t < TILE_SIZE; t++) {
+        //     result += tileA[localRow][t] * tileB[t][localCol];
+        // }
+        
+
+            for (uint t = 0; t < TILE_SIZE / 4; t++) {
+                vec4 a = tileA[localRow][t];     
+                vec4 bvec = tileB[t][vec4Index];
+                float b = bvec[vec4Offset];
+                result += dot(a, b);
+            }
 
         // Wait for all threads before loading the next tile
         barrier();

@@ -574,20 +574,21 @@ public:
 	//    Output buffer contents
 		int cols = 1024;  
 
-		// LOG("First row of matrix A:\n");
-		// for (int i = 0; i < cols; ++i) {
-		// 	LOG("%f \t", Input_MatrixA[i]);
-		// }
-		// LOG("First row of matrix B:\n");
-		// for (int i = 0; i < cols; ++i) {
-		// 	LOG("%f \t", Input_MatrixB[i]);
-		// }
-
-		LOG("%f \t", Output_Matrix[0]);
-		// LOG("First row of output matrix:\n");
-		// for (int i = 0; i < cols; ++i) {
-		// 	LOG("%f \t", Output_Matrix[i]);
-		// }
+		LOG("Matrix A:\n");
+		for (int i = 0; i < N*N; ++i) {
+			LOG("%f \t", Input_MatrixA[i]);
+		}
+		LOG("\n");
+		LOG("Matrix B:\n");
+		for (int i = 0; i < N*N; ++i) {
+			LOG("%f \t", Input_MatrixB[i]);
+		}
+		LOG("\n");
+		// LOG("Resulting matrix first two elements: %f, %f\t", Output_Matrix[0],Output_Matrix[1] );
+		LOG("Output matrix:\n");
+		for (int i = 0; i < N*N; ++i) {
+			LOG("%f \t", Output_Matrix[i]);
+		}
 
 		// std::cout << std::endl;
 

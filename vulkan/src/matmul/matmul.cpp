@@ -229,6 +229,8 @@ public:
 		// output matrix
 		std::vector<float> Output_Matrix(N * N);
 
+			
+
 		// fill input data
 		uint32_t n = 0;
 		std::generate(Input_MatrixA.begin(), Input_MatrixA.end(), [&n] { return n++; });

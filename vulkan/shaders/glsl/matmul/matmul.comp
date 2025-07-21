@@ -70,8 +70,10 @@ void main() {
                 dataA[row * MATRIX_SIZE + (k + localCol + 3)]
             );
 
-            // Load 4 floats from B column-wise
-            tileB[localRow][vec4Col] = vec4(
+
+        }
+        if ((localRow % 4) == 0) {
+            tileB[localCol][vec4Col] = vec4(
                 dataB[(k + localRow + 0) * MATRIX_SIZE + col],
                 dataB[(k + localRow + 1) * MATRIX_SIZE + col],
                 dataB[(k + localRow + 2) * MATRIX_SIZE + col],
@@ -86,14 +88,13 @@ void main() {
         // for (uint t = 0; t < TILE_SIZE; t++) {
         //     result += tileA[localRow][t] * tileB[t][localCol];
         // }
-        
 
-            for (uint t = 0; t < TILE_SIZE / 4; t++) {
-                vec4 a = tileA[localRow][t];     
-                vec4 bvec = tileB[t][vec4Index];
-                float b = bvec[vec4Offset];
-                result += dot(a, b);
-            }
+        for (uint t = 0; t < TILE_SIZE / 4; t++) {
+        // result += dot(tileA[...], tileB[...])
+            vec4 a = tileA[localRow][t];     
+            vec4 b = tileB[localCol][t];  
+            result += dot(a, b);
+        }
 
         // Wait for all threads before loading the next tile
         barrier();

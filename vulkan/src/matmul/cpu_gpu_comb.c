@@ -7,7 +7,8 @@
 
 void blis_matmul(float* A, float* B, float* C, uint32_t N, uint32_t TILE){
     bli_init();
-
+    bli_thread_set_num_threads(3);
+    printf("BLIS using %d threads\n", bli_thread_get_num_threads());
     if (!A || !B || !C) {
         fprintf(stderr, "Memory allocation failed\n");
         exit(EXIT_FAILURE);
@@ -70,7 +71,7 @@ int main(int argc, char* argv[]) {
 
     // vulkan_matmul(A, B, C, N, TILE);
 
-    // print_matrix_double(C_b, N);
+    // print_matrix_float(C, N);
 
     // free everything
     free(A); free(B); free(C);

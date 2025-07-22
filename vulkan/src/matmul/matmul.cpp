@@ -576,19 +576,19 @@ public:
 	//    Output buffer contents
 		int cols = 1024;  
 
-		LOG("Matrix A:\n");
-		for (int i = 0; i < N*N; ++i) {
-			LOG("%f \t", Input_MatrixA[i]);
-		}
-		LOG("\n");
-		LOG("Matrix B:\n");
-		for (int i = 0; i < N*N; ++i) {
-			LOG("%f \t", Input_MatrixB[i]);
-		}
-		LOG("\n");
+		// LOG("Matrix A:\n");
+		// for (int i = 0; i < N*N; ++i) {
+		// 	LOG("%f \t", Input_MatrixA[i]);
+		// }
+		// LOG("\n");
+		// LOG("Matrix B:\n");
+		// for (int i = 0; i < N*N; ++i) {
+		// 	LOG("%f \t", Input_MatrixB[i]);
+		// }
+		// LOG("\n");
 		// LOG("Resulting matrix first two elements: %f, %f\t", Output_Matrix[0],Output_Matrix[1] );
 		LOG("Output matrix:\n");
-		for (int i = 0; i < N*N; ++i) {
+		for (int i = 0; i < N; ++i) {
 			LOG("%f \t", Output_Matrix[i]);
 		}
 

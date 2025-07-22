@@ -2,15 +2,15 @@
 cd vulkan/build/bin
 # List of (MATRIX_SIZE, BLOCK_SIZE) pairs
 pairs=(
-  "16 4"
-  "32 4"
-  "64 4"
-  # "128 4"
-  # "256 4"
-  # "512 4"
-  # "1024 4"
-  # "2048 4"
-  # "4096 4"
+  "16 8"
+  "32 16"
+  "64 16"
+  "128 16"
+  "256 16"
+  "512 16"
+  "1024 16"
+  "2048 16"
+  "4096 16"
 )
 
 # Loop through each pair and call the program

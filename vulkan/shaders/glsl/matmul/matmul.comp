@@ -19,7 +19,7 @@ layout (constant_id = 0) const uint MATRIX_SIZE = 1024;
 layout (constant_id = 1) const uint TILE_SIZE = 16; 
 
 shared vec4 tileA[TILE_SIZE][TILE_SIZE / 4];
-shared vec4 tileB[TILE_SIZE][TILE_SIZE / 4];
+shared vec4 tileB[TILE_SIZE/4][TILE_SIZE];
 
 void main() {
     // global position in the matrix
@@ -75,7 +75,7 @@ void main() {
         }
         if ((localRow % 4) == 0) {
             // result += 2;
-            tileB[localCol][vec4Row] = vec4(
+            tileB[vec4Row][localCol] = vec4(
                 dataB[(k + localRow + 0) * MATRIX_SIZE + col],
                 dataB[(k + localRow + 1) * MATRIX_SIZE + col],
                 dataB[(k + localRow + 2) * MATRIX_SIZE + col],
@@ -94,7 +94,7 @@ void main() {
         for (uint t = 0; t < TILE_SIZE / 4; t++) {
         // result += dot(tileA[...], tileB[...])
             vec4 a = tileA[localRow][t];     
-            vec4 b = tileB[localCol][t];  
+            vec4 b = tileB[t][localCol];  
             result += dot(a, b);
         }
 

@@ -76,10 +76,20 @@ void main() {
         if ((localRow % 4) == 0) {
             // result += 2;
             tileB[vec4Row][localCol] = vec4(
-                dataB[(k + localRow + 0) * MATRIX_SIZE + col],
-                dataB[(k + localRow + 1) * MATRIX_SIZE + col],
-                dataB[(k + localRow + 2) * MATRIX_SIZE + col],
-                dataB[(k + localRow + 3) * MATRIX_SIZE + col]
+                // dataB[(k + localRow + 0) * MATRIX_SIZE + col],
+                // dataB[(k + localRow + 1) * MATRIX_SIZE + col],
+                // dataB[(k + localRow + 2) * MATRIX_SIZE + col],
+                // dataB[(k + localRow + 3) * MATRIX_SIZE + col]
+
+                // dataB[row * MATRIX_SIZE + (k + localCol + 0)],
+                // dataB[row * MATRIX_SIZE + (k + localCol + 1)],
+                // dataB[row * MATRIX_SIZE + (k + localCol + 2)],
+                // dataB[row * MATRIX_SIZE + (k + localCol + 3)]
+                
+                dataB[col * MATRIX_SIZE + (k + localRow + 0)],
+                dataB[col * MATRIX_SIZE + (k + localRow + 1)],
+                dataB[col * MATRIX_SIZE + (k + localRow + 2)],
+                dataB[col * MATRIX_SIZE + (k + localRow + 3)]
             );
         }
 

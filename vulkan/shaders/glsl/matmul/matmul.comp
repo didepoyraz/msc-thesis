@@ -28,18 +28,20 @@ layout (constant_id = 0) const uint MATRIX_SIZE = 1024;
 layout (constant_id = 1) const uint TILE_SIZE = 16; 
 layout (constant_id = 2) const uint leadingDimensionN = 4096; 
 
-shared float tileA[TILE_SIZE][TILE_SIZE];
-shared float tileB[TILE_SIZE][TILE_SIZE];
+shared vec4 tileA[TILE_SIZE][TILE_SIZE / 4];
+shared vec4 tileB[TILE_SIZE/4][TILE_SIZE];
 
 void main() {
-    // // global position in the matrix
+    // global position in the matrix
     uint row = pc.offsetRowA + gl_GlobalInvocationID.y;
     uint col = pc.offsetColB + gl_GlobalInvocationID.x; 
-
 
     // local position within the workgroup
     uint localRow = gl_LocalInvocationID.y;
     uint localCol = gl_LocalInvocationID.x;
+
+    uint vec4Col = localCol / 4;
+    uint vec4Row = localRow / 4;
 
     // Bounds check
     if (row >= leadingDimensionN || col >= leadingDimensionN) {
@@ -48,33 +50,62 @@ void main() {
 
     float result = 0;
 
-    // Loop over tiles horizontally and k increases by TILE_SIZE so that each thread only accesses it's own relative position within different tiles
+        // Loop over tiles horizontally and k increases by TILE_SIZE so that each thread only accesses it's own relative position within different tiles
     for (uint k = 0; k < MATRIX_SIZE; k += TILE_SIZE) {
 
         // Each thread loads one element into the tile from A and B per iteration and MATRIX_SIZE/TILE_SIZE 
         // positions per tileA and tileB in total
+
         // tileA gets the row-wise elements from dataA and tileB gets the column-wise elements. For a thread, loop iterations
         // will have it shifted to different row positions of the partial dot product of the dataA (according to tiles) for 
         // tileA and different column positions of the partial dot product for dataB for tileB
         //---------------------------------------------------------------------------------------------------------------------//
         // For a given tile (k-th tile in the inner dimension),
-         // each thread loads:
-         // - One value from A: in the same row, shifting across columns (k + localCol)
-         // - One value from B: in the same column, shifting across rows (k + localRow)
+            // each thread loads:
+            // - One value from A: in the same row, shifting across columns (k + localCol)
+            // - One value from B: in the same column, shifting across rows (k + localRow)
 
-         // tileA stores a horizontal slice (row-major) of A
-         // tileB stores a vertical slice (column-major) of B
+            // tileA stores a horizontal slice (row-major) of A
+            // tileB stores a vertical slice (column-major) of B
 
-        tileA[localRow][localCol] = dataA[row * leadingDimensionN + (pc.offsetColA + k + localCol)];  
-        tileB[localRow][localCol] = dataB[(pc.offsetRowB + k + localRow) * leadingDimensionN + col];
+        // tileA[localRow][localCol] = dataA[row * leadingDimensionN + (pc.offsetColA + k + localCol)];  
+        // tileB[localRow][localCol] = dataB[(pc.offsetRowB + k + localRow) * leadingDimensionN + col];
 
+        if ((localCol % 4) == 0) {
+            // Load 4 floats from A row-wise
+            // result += 123;
+            tileA[localRow][vec4Col] = vec4(
+                dataA[row * leadingDimensionN + (pc.offsetColA + k + localCol + 0)],
+                dataA[row * leadingDimensionN + (pc.offsetColA + k + localCol + 1)],
+                dataA[row * leadingDimensionN + (pc.offsetColA + k + localCol + 2)],
+                dataA[row * leadingDimensionN + (pc.offsetColA + k + localCol + 3)]
+            );
+
+
+        }
+        if ((localRow % 4) == 0) {
+            // result += 2;
+            tileB[vec4Row][localCol] = vec4(
+                dataB[(pc.offsetRowB + k + localRow + 0) * leadingDimensionN + col],
+                dataB[(pc.offsetRowB + k + localRow + 1) * leadingDimensionN + col],
+                dataB[(pc.offsetRowB + k + localRow + 2) * leadingDimensionN + col],
+                dataB[(pc.offsetRowB + k + localRow + 3) * leadingDimensionN + col]
+            );
+        }
 
         // Synchronize all threads in the workgroup for the tile to be completed
         barrier();
 
         // Compute partial dot product for this tile
-        for (uint t = 0; t < TILE_SIZE; t++) {
-            result += tileA[localRow][t] * tileB[t][localCol];
+        // for (uint t = 0; t < TILE_SIZE; t++) {
+        //     result += tileA[localRow][t] * tileB[t][localCol];
+        // }
+
+        for (uint t = 0; t < TILE_SIZE / 4; t++) {
+        // result += dot(tileA[...], tileB[...])
+            vec4 a = tileA[localRow][t];     
+            vec4 b = tileB[t][localCol];  
+            result += dot(a, b);
         }
 
         // Wait for all threads before loading the next tile
@@ -83,16 +114,15 @@ void main() {
 
     uint outputRow = pc.offsetRowC + gl_GlobalInvocationID.y;
     uint outputCol = pc.offsetColC + gl_GlobalInvocationID.x;
-
-    // Store the full result in the output matrix, each thread saves its own respective result
-     if (outputRow < leadingDimensionN && outputCol < leadingDimensionN) {
+    if (outputRow < leadingDimensionN && outputCol < leadingDimensionN) {
         
         // if the resulting matrix is being accumulated in a shared buffer 
         // outside of vulan do "=" if there is no shared buffer outside of 
         // vulkan and the program is calculating partial dot products in 
         // seperate command buffer do "+="
         
-        output_dataC[outputRow * leadingDimensionN + outputCol] = result;
+        output_dataC[outputRow * leadingDimensionN + outputCol] += result;
     }
-
+    // Store the full result in the output matrix, each thread saves its own respective result
+    // output_dataC[row * leadingDimensionN + col] = result;
 }

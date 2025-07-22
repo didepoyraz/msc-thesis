@@ -87,9 +87,11 @@ int main(int argc, char* argv[]) {
 
     // fill the vectors 
     for (int i = 0; i < N * N; i++) {
-        A[i] = (float)i+1;
-        B[i] = (float)i+1;
+        A[i] = (float)i;
+        B[i] = (float)i + N*N;
     }
+    // print_matrix_float(A,N);
+    // print_matrix_float(B,N);
 
     Mult matrix = {.A = A, .B = B, .C = C, .N = N, .BLOCK_SIZE = BLOCK_SIZE};
     TileQueue queue = { .head = 0, .tail = 0, .size = 0, .done = false, .matrix = matrix};
@@ -145,8 +147,8 @@ int main(int argc, char* argv[]) {
     printf("Total Compute Time: %f ns \n", elapsed_full_execution);
     printf("GPU has completed %i tiles and the CPU has completed %i tiles.\n", gpu_counter, cpu_counter);
     // printf("Resulting Matrix: \n");
-    // print_first_row_matrix_float(C, N);
-    printf("matrix c first element %f, last element %f", C[0], C[(N*N)-1]);
+    print_first_row_matrix_float(C, N);
+    // printf("matrix c first element %f, last element %f", C[0], C[(N*N)-1]);
     // printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
     vulkan_print_total_time();
 

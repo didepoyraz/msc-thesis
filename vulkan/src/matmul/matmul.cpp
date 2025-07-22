@@ -237,6 +237,15 @@ public:
 		// matrix B
 		std::vector<float> Input_MatrixB(inB, inB + ldN * ldN);
 
+		// Transpose B
+		// for (size_t i = 0; i < N; ++i) {
+        //     for (size_t j = i + 1; j < N; ++j) {
+        //         float temp =Input_MatrixB[i * N + j];
+        //         Input_MatrixB[i * N + j] = Input_MatrixB[j * N + i];
+        //         Input_MatrixB[j * N + i] = temp;
+        //     }
+        // }
+
 		bufferSize = ldN * ldN * sizeof(float);
 
 		// Copy input data to GPU mem using staging buffer 
@@ -396,7 +405,7 @@ public:
 		VkComputePipelineCreateInfo computePipelineCreateInfo = vks::initializers::computePipelineCreateInfo(pipelineLayout, 0);
 
 		// compute tile size according to the size of N
-		TILE = (N >= 16) ? 16 : 1;
+		TILE = (N >= 16) ? 16 : 4;
 		// Pass SSBO size via specialization constant
 		struct SpecializationData {
 			uint32_t MATRIX_SIZE;

@@ -67,8 +67,8 @@ int main(int argc, char* argv[]) {
 
     // fill the vectors 
     for (int i = 0; i < N * N; i++) {
-        A[i] = (float)i+1;
-        B[i] = (float)i+1;
+        A[i] = (float)i;
+        B[i] = (float)i+ N*N;
     }
 
     Mult matrix = {.A = A, .B = B, .C = C, .N = N, .BLOCK_SIZE = BLOCK_SIZE};
@@ -131,6 +131,14 @@ int main(int argc, char* argv[]) {
     printf("matrix c first element %f, last element %f", C[0], C[(N*N)-1]);
     // printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
     vulkan_print_total_time();
+
+
+    char filename[128];
+    char* s = "/home/pi/Desktop/msc-thesis/vulkan/results/output_matrix";
+    snprintf(filename, sizeof(filename), "%s_%d_%d.csv ", s, N, BLOCK_SIZE);
+    
+    printf("filename: %s", filename );
+    save_matrix_to_file(filename, C, N);
 
     // free everything
     free(A); free(B); free(C);

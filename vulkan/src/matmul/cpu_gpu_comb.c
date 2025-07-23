@@ -10,7 +10,7 @@
 int cpu_counter = 0;
 int gpu_counter = 0;
 
-#define DEBUG_MODE 0
+#define DEBUG_MODE 1
 
 
 #if DEBUG_MODE 
@@ -22,6 +22,7 @@ int gpu_counter = 0;
 #define offsetA(i, p, ldN) (i * ldN + p)
 #define offsetB(p, j, ldN) (p * ldN + j)
 #define offsetC(i, j, ldN) (i * ldN + j)
+
 #define NUM_THREADS 4
 
 void* cpu_worker(void* arg){
@@ -85,6 +86,7 @@ int main(int argc, char* argv[]) {
     float* B = malloc(N * N * sizeof(float));
     float* C = malloc(N * N * sizeof(float));
 
+    memset(C, 0, sizeof(float) * N * N);
     // fill the vectors 
     for (int i = 0; i < N * N; i++) {
         A[i] = (float)i;
@@ -147,16 +149,36 @@ int main(int argc, char* argv[]) {
     printf("Total Compute Time: %f ns \n", elapsed_full_execution);
     printf("GPU has completed %i tiles and the CPU has completed %i tiles.\n", gpu_counter, cpu_counter);
     // printf("Resulting Matrix: \n");
-    print_first_row_matrix_float(C, N);
+    print_matrix_float(C, N);
     // printf("matrix c first element %f, last element %f", C[0], C[(N*N)-1]);
     // printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
     vulkan_print_total_time();
 
+
+    // Check Result by comparing it to pure blis_matmul
+    // float *blis_validation_result = blis_matmul(A, B, N);
+    // float epsilon = 1e-5;
+
+    // if (compare_matrices(blis_validation_result, C, N, epsilon)) {
+    //     printf("Matrices match within tolerance %.1e\n", epsilon);
+    // } else {
+    //     printf("Matrices do NOT match!\n");
+    // }
+    // printf("\nvalidation matrix: ");
+    // print_matrix_float(blis_validation_result, N);
     // free everything
+
+
+    char filename[128];
+    char* s = "/home/pi/Desktop/msc-thesis/vulkan/results/output_matrix";
+    snprintf(filename, sizeof(filename), "%s_%d_%d.csv ", s, N, BLOCK_SIZE);
+    
+    printf("filename: %s", filename );
+    save_matrix_to_file(filename, C, N);
     free(A); free(B); free(C);
+    //  free(blis_validation_result);
 
     vulkan_cleanup();
     bli_finalize();
-
     return 0;
 }

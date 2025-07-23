@@ -517,7 +517,7 @@ public:
 		// 	printf(": %f\t", fdata[i]);
 		// }
 		// LOG("\n--------------\nMatrix C before adding mapped: \n");
-		// for (int i = 0; i < 16; ++i) {
+		// for (int i = 0; i < ldN*ldN; ++i) {
 		// 	printf(": %f\t", outC[i]);
 		// }
 		// LOG("\n\n");
@@ -527,7 +527,13 @@ public:
 				int idx = (pc.offsetRowC + r) * ldN + (pc.offsetColC + c);
 				outC[idx] += ((float*)mapped)[idx];
 			}
-		}
+		}	
+
+		// LOG("\n--------------\nMatrix C after adding mapped: \n");
+		// for (int i = 0; i < ldN*ldN; ++i) {
+		// 	printf(": %f\t", outC[i]);
+		// }
+		// LOG("\n\n");
 
 		//TODO: you need to flush it to the GPU otherwise this is not going to be
 		// set to 0 when you only do memset.

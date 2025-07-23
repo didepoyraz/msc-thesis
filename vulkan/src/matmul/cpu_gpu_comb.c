@@ -87,8 +87,8 @@ int main(int argc, char* argv[]) {
 
     // fill the vectors 
     for (int i = 0; i < N * N; i++) {
-        A[i] = (float)i+1;
-        B[i] = (float)i+1;
+        A[i] = (float)i;
+        B[i] = (float)i + N*N;
     }
 
     Mult matrix = {.A = A, .B = B, .C = C, .N = N, .BLOCK_SIZE = BLOCK_SIZE};

@@ -150,6 +150,13 @@ int main(int argc, char* argv[]) {
     // printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
     vulkan_print_total_time();
 
+    char filename[128];
+    char* s = "/home/pi/Desktop/msc-thesis/vulkan/results/output_matrix";
+    snprintf(filename, sizeof(filename), "%s_%d_%d.csv ", s, N, BLOCK_SIZE);
+    
+    printf("filename: %s", filename );
+    save_matrix_to_file(filename, C, N);
+
     // free everything
     free(A); free(B); free(C);
 

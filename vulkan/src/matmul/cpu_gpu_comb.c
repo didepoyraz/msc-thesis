@@ -100,7 +100,7 @@ int main(int argc, char* argv[]) {
     
     pthread_mutex_init(&queue.lock, NULL);
     pthread_cond_init(&queue.not_empty, NULL);
-
+    // TODO: initialise the third condition variable here as well!!
     clock_gettime(CLOCK_MONOTONIC, &start);
 
     vulkan_init(A, B, C, N, BLOCK_SIZE);

@@ -391,9 +391,10 @@ public:
 			VkComputePipelineCreateInfo computePipelineCreateInfo = vks::initializers::computePipelineCreateInfo(pipelineLayout, 0);
 
 			// Pass SSBO size via specialization constant
+			// made 1D workgroups
 			struct SpecializationData {
 				uint32_t MATRIX_SIZE = N;
-				uint32_t TILE_X = TILE;
+				uint32_t TILE_X = TILE*TILE;
 				uint32_t TILE_Y = TILE;
 			} specializationData;
 

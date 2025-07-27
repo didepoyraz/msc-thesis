@@ -39,7 +39,6 @@ void main() {
 	for (uint i = 0; i < MATRIX_SIZE; i++) {
 		result += (dataA[x * MATRIX_SIZE + i] * dataB[i * MATRIX_SIZE + y]); 
 	}
-	return result;
 
     output_dataC[x * MATRIX_SIZE + y] = result;
 }

@@ -1,16 +1,21 @@
-cd src
-make clean
-make all MAT_SIZE=1024 TILE_SIZE=64
-perf stat -B -e cache-references,cache-misses,cycles,instructions,branches,faults,migrations,L1-dcache-load-misses,L1-dcache-loads,L1-dcache-stores,l2d_cache,l2d_cache_refill ./mat_mult
-perf stat -B -e cache-references,cache-misses,cycles,instructions,branches,faults,migrations,L1-dcache-load-misses,L1-dcache-loads,L1-dcache-stores,l2d_cache,l2d_cache_refill ./mat_mult_inter
-perf stat -B -e cache-references,cache-misses,cycles,instructions,branches,faults,migrations,L1-dcache-load-misses,L1-dcache-loads,L1-dcache-stores,l2d_cache,l2d_cache_refill ./mat_mult_tiles
-perf stat -B -e cache-references,cache-misses,cycles,instructions,branches,faults,migrations,L1-dcache-load-misses,L1-dcache-loads,L1-dcache-stores,l2d_cache,l2d_cache_refill ./neon
-perf stat -B -e cache-references,cache-misses,cycles,instructions,branches,faults,migrations,L1-dcache-load-misses,L1-dcache-loads,L1-dcache-stores,l2d_cache,l2d_cache_refill ./blis
-perf stat -B -e cache-references,cache-misses,cycles,instructions,branches,faults,migrations,L1-dcache-load-misses,L1-dcache-loads,L1-dcache-stores,l2d_cache,l2d_cache_refill ./strassen
-perf stat -B -e cache-references,cache-misses,cycles,instructions,branches,faults,migrations,L1-dcache-load-misses,L1-dcache-loads,L1-dcache-stores,l2d_cache,l2d_cache_refill ./neon_strassen
-perf stat -B -e cache-references,cache-misses,cycles,instructions,branches,faults,migrations,L1-dcache-load-misses,L1-dcache-loads,L1-dcache-stores,l2d_cache,l2d_cache_refill ./mpi_strassen
-perf stat -B -e cache-references,cache-misses,cycles,instructions,branches,faults,migrations,L1-dcache-load-misses,L1-dcache-loads,L1-dcache-stores,l2d_cache,l2d_cache_refill ./pthread_neon_strassen
-perf stat -B -e cache-references,cache-misses,cycles,instructions,branches,faults,migrations,L1-dcache-load-misses,L1-dcache-loads,L1-dcache-stores,l2d_cache,l2d_cache_refill ./para_blis
-perf stat -B -e cache-references,cache-misses,cycles,instructions,branches,faults,migrations,L1-dcache-load-misses,L1-dcache-loads,L1-dcache-stores,l2d_cache,l2d_cache_refill ./atlas
-make clean
-cd ..
+#!/bin/bash
+cd vulkan/build/bin
+# List of (MATRIX_SIZE, BLOCK_SIZE) pairs
+pairs=(
+  "16 8"
+  "32 16"
+  "64 16"
+  "128 16"
+  "256 16"
+  "512 16"
+  "1024 16"
+  "2048 16"
+  "4096 16"
+)
+
+# Loop through each pair and call the program
+for pair in "${pairs[@]}"; do
+  read -r MATRIX_SIZE BLOCK_SIZE <<< "$pair"
+  echo "Running ./matmul $MATRIX_SIZE $BLOCK_SIZE"
+  ./matmul "$MATRIX_SIZE" "$BLOCK_SIZE"
+done

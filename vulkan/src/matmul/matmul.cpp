@@ -6,6 +6,8 @@
 #include <iostream>
 #include <algorithm>
 #include <chrono>
+#include <iomanip> 
+#include <sstream>  
 
 #include <vulkan/vulkan.h>
 #include "VulkanTools.h"
@@ -564,6 +566,34 @@ public:
 
 			// Copy to output
 			memcpy(Output_Matrix.data(), mapped, bufferSize);
+
+						std::string basePath = "/home/pi/Desktop/msc-thesis/vulkan/results/output_matrix";
+
+			// Create filename using stringstream
+			std::ostringstream oss;
+			oss << basePath << "_" << N << "_" << TILE << ".csv";
+			std::string filename = oss.str();
+
+			std::ofstream outFile(filename);
+			if (!outFile.is_open()) {
+				std::cerr << "Error opening file for writing: " << filename << std::endl;
+				return;
+			}
+
+			outFile << std::fixed << std::setprecision(6);
+			for (int i = 0; i < N; ++i) {
+				for (int j = 0; j < N; ++j) {
+					outFile << Output_Matrix[i * N + j];
+					if (j < N - 1) {
+						outFile << ",";
+					}
+				}
+				outFile << "\n";
+			}
+
+			outFile.close();
+			std::cout << "Matrix saved to " << filename << std::endl;
+
 			vkUnmapMemory(device, hostMemoryC);
 		}
 
@@ -586,7 +616,7 @@ public:
 
 		LOG("%f \t", Output_Matrix[0]);
 		// LOG("First row of output matrix:\n");
-		// for (int i = 0; i < cols; ++i) {
+		// for (int i = 0; i < N*N; ++i) {
 		// 	LOG("%f \t", Output_Matrix[i]);
 		// }
 

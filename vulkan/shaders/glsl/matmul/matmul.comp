@@ -18,27 +18,39 @@ layout (local_size_x_id = 1, local_size_y = 1, local_size_z = 1) in;
 layout (constant_id = 0) const uint MATRIX_SIZE = 1024;
 layout (constant_id = 2) const uint BLOCKSIZE = 16; 
 
-// shared float tileA[TILE_SIZE][TILE_SIZE];
-// shared float tileB[TILE_SIZE][TILE_SIZE];
+shared float tileA[BLOCKSIZE * BLOCKSIZE];
+shared float tileB[BLOCKSIZE * BLOCKSIZE];
 
 void main() {
-    // global position in the matrix
-    uint wg_x = gl_WorkGroupID.x;
-    uint wg_y = gl_WorkGroupID.y;
+   // global position in the matrix
+   uint cRow = gl_WorkGroupID.x;
+   uint cCol = gl_WorkGroupID.y;
 
-    uint local_id = gl_LocalInvocationID.x;
+   uint local_id = gl_LocalInvocationID.x;
 
-    uint local_x = local_id / BLOCKSIZE;
-    uint local_y = local_id % BLOCKSIZE;
+   uint threadRow = local_id / BLOCKSIZE;
+   uint threadCol = local_id % BLOCKSIZE;
 
-    uint x = wg_x * BLOCKSIZE + local_x;
-    uint y = wg_y * BLOCKSIZE + local_y;
+   uint baseA = cRow * BLOCKSIZE * MATRIX_SIZE;
+   uint baseB = cCol * BLOCKSIZE;
+   uint baseC = cRow * BLOCKSIZE * MATRIX_SIZE + cCol * BLOCKSIZE;
 
+   // uint x = wg_x * BLOCKSIZE + local_x;
+   // uint y = wg_y * BLOCKSIZE + local_y;
+   float result = 0.0;
+   for (uint k = 0; k < MATRIX_SIZE; k += BLOCKSIZE) {
 
-    float result = 0.0;
-	for (uint i = 0; i < MATRIX_SIZE; i++) {
-		result += (dataA[x * MATRIX_SIZE + i] * dataB[i * MATRIX_SIZE + y]); 
-	}
+      tileA[threadRow * BLOCKSIZE + threadCol] = dataA[baseA + threadRow * MATRIX_SIZE + (k + threadCol)];
+      tileB[threadRow * BLOCKSIZE + threadCol] = dataB[baseB + (k + threadRow) * MATRIX_SIZE + threadCol];
 
-    output_dataC[x * MATRIX_SIZE + y] = result;
+      barrier();
+
+      // Compute partial dot product for this tile
+      for (uint t = 0; t < BLOCKSIZE; t++) {
+         result += tileA[threadRow * BLOCKSIZE + t] * tileB[t * BLOCKSIZE + threadCol];
+      }
+
+      barrier();
+   }
+    output_dataC[baseC + threadRow * MATRIX_SIZE + threadCol] = result;
 }

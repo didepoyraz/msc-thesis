@@ -16,7 +16,7 @@
 
 uint32_t N = 10; // matrix size, default
 uint32_t TILE = 1;
-uint32_t RESULTS_PER_THREAD = 4;
+uint32_t RESULTS_PER_THREAD = 8;
 
 CommandLineParser commandLineParser;
 
@@ -391,6 +391,7 @@ public:
 			// Create pipeline
 			VkComputePipelineCreateInfo computePipelineCreateInfo = vks::initializers::computePipelineCreateInfo(pipelineLayout, 0);
 
+			// uint32_t THREADS_PER_TILE = TILE / RESULTS_PER_THREAD;
 			// Pass SSBO size via specialization constant
 			struct SpecializationData {
 				uint32_t MATRIX_SIZE = N;

@@ -16,7 +16,7 @@
 
 uint32_t N = 10; // matrix size, default
 uint32_t TILE = 1;
-uint32_t RESULTS_PER_THREAD = 8;
+uint32_t RESULTS_PER_THREAD = 4;
 
 CommandLineParser commandLineParser;
 
@@ -393,21 +393,29 @@ public:
 
 			// uint32_t THREADS_PER_TILE = TILE / RESULTS_PER_THREAD;
 			// Pass SSBO size via specialization constant
+			
 			struct SpecializationData {
 				uint32_t MATRIX_SIZE = N;
 				uint32_t TILE_X = TILE;
 				uint32_t TILE_Y = TILE;
 				uint32_t THREAD_COUNT = TILE / RESULTS_PER_THREAD;
+				uint32_t RESULTS_PER_THREAD = RESULTS_PER_THREAD;
 			} specializationData;
+			LOG("THREAD_COUNT: (%i, %i)\n", TILE/RESULTS_PER_THREAD, TILE);
+			
+			specializationData.RESULTS_PER_THREAD = RESULTS_PER_THREAD;
+			specializationData.THREAD_COUNT = TILE / RESULTS_PER_THREAD;
+
 
 			std::vector<VkSpecializationMapEntry> specializationMapEntries = {
 				{vks::initializers::specializationMapEntry(0, offsetof(SpecializationData, MATRIX_SIZE), sizeof(uint32_t))},
 				{vks::initializers::specializationMapEntry(1,offsetof(SpecializationData, TILE_X), sizeof(uint32_t))},
 				{vks::initializers::specializationMapEntry(2, offsetof(SpecializationData, TILE_Y), sizeof(uint32_t))},
 				{vks::initializers::specializationMapEntry(3, offsetof(SpecializationData, THREAD_COUNT), sizeof(uint32_t))},
+				{vks::initializers::specializationMapEntry(4, offsetof(SpecializationData, RESULTS_PER_THREAD), sizeof(uint32_t))},
 			};
 				VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(
-				4, specializationMapEntries.data(), sizeof(SpecializationData), &specializationData);
+				5, specializationMapEntries.data(), sizeof(SpecializationData), &specializationData);
 
 			std::string shaderDir = "glsl";
 			if (commandLineParser.isSet("shaders")) {
@@ -589,7 +597,7 @@ public:
 
 		// LOG("%f \t", Output_Matrix[0]);
 		LOG("First row of output matrix:\n");
-		for (int i = 0; i < N; ++i) {
+		for (int i = 0; i < N*N; ++i) {
 			LOG("%f \t", Output_Matrix[i]);
 		}
 
@@ -633,6 +641,7 @@ int main(int argc, char* argv[]) {
 	if (argc > 2) {
         N = std::atoi(argv[1]);
 		TILE = std::atoi(argv[2]);
+		RESULTS_PER_THREAD = std::atoi(argv[3]);
     }
 
 	std::cout << "Using N = " << N << std::endl;

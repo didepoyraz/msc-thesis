@@ -14,81 +14,82 @@ layout(binding = 2) buffer MatrixC {
 
 layout (constant_id = 0) const uint MATRIX_SIZE = 1024;
 layout (constant_id = 1) const uint TILE_SIZE = 16; 
-layout (constant_id = 3) const uint THREADS_PER_TILE = 8;
+layout (constant_id = 3) const uint THREADS_PER_TILE_DIM = 2;
+layout (constant_id = 4) const uint RESULTS_PER_THREAD = 8;
 
-//layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout (local_size_x_id = 3, local_size_y_id = 1, local_size_z = 1) in; // each thread will calculate a 2x2 output
 
-layout (local_size_x = 8, local_size_y = 1, local_size_z = 1) in; // each thread will calculate a 2x2 output
 
-uint RESULTS_PER_THREAD = TILE_SIZE / THREADS_PER_TILE;
+// layout (local_size_x = 1, local_size_y = 4, local_size_z = 1) in; // each thread will calculate a 2x2 output
 
 shared float tileA[TILE_SIZE][TILE_SIZE];
 shared float tileB[TILE_SIZE][TILE_SIZE];
 
 void main() {
-   uint globalRowBase = gl_GlobalInvocationID.x;
-   uint globalColBase = gl_GlobalInvocationID.y;
 
-   uint localRow = gl_LocalInvocationID.x;
-   uint localCol = gl_LocalInvocationID.y;
+   // uvec2 gid = gl_GlobalInvocationID.xy;
+   // float resul
+   //  // each thread handles a TILE / RESULTS_PER_THREAD tile
+   //  // compute the starting cell for this tile
+   // uint base_x = gid.x* RESULTS_PER_THREAD;
+   // uint base_y = gid.y*RESULTS_PER_THREAD;
 
-   output_dataC[globalRowBase * MATRIX_SIZE + globalColBase] += 1;
+   uint globalRowBase = gl_GlobalInvocationID.y * RESULTS_PER_THREAD;
+   uint globalColBase = gl_GlobalInvocationID.x * RESULTS_PER_THREAD;
 
-   // // uvec2 gid = gl_GlobalInvocationID.xy;
-   // // float resul
-   // //  // each thread handles a TILE / RESULTS_PER_THREAD tile
-   // //  // compute the starting cell for this tile
-   // // uint base_x = gid.x* RESULTS_PER_THREAD;
-   // // uint base_y = gid.y*RESULTS_PER_THREAD;
-   // // uint globalRowBase = gl_GlobalInvocationID.x;
-   // // uint globalColBase = gl_GlobalInvocationID.y;
+   uint localRow = gl_LocalInvocationID.y; // this is the location in the thread group, so the layout local size
+   uint localCol = gl_LocalInvocationID.x;
 
-   // uint localRow = gl_LocalInvocationID.x;
-   // uint localCol = gl_LocalInvocationID.y;
 
-   // uint group_id_x = gl_WorkGroupID.x;
-   // uint group_id_y = gl_WorkGroupID.y;
+   float result[RESULTS_PER_THREAD];
+   for (uint i = 0; i < RESULTS_PER_THREAD; ++i) {
+         result[i]= 123.0;
+      }
 
-   // uint globalRowBase = TILE_SIZE * group_id_x + localRow;
-   // uint globalColBase = TILE_SIZE * group_id_y + localCol * RESULTS_PER_THREAD;
+   uint tileRow = gl_WorkGroupID.y * TILE_SIZE;
+   uint tileCol = gl_WorkGroupID.x * TILE_SIZE;
 
-   // float result[RESULTS_PER_THREAD];
-   // for (uint i = 0; i < RESULTS_PER_THREAD; ++i) {
-   //       result[i] = 0.0;
-   // }
+   // uint globalRow = gl_GlobalInvocationID.x;
+   // uint globalCol = gl_GlobalInvocationID.y;
 
-  
-   // uint num_tiles = (MATRIX_SIZE * MATRIX_SIZE )/ (TILE_SIZE*TILE_SIZE);
+   // output_dataC[globalRow * MATRIX_SIZE + globalCol] = 123;
+   
+   for (uint k = 0; k < MATRIX_SIZE; k += TILE_SIZE) {
 
-   // for (uint k = 0; k < num_tiles; ++k) {
-   //    for (uint i = 0; i < RESULTS_PER_THREAD; ++i) {
-   //       uint offsetCol = localCol * RESULTS_PER_THREAD + i;
+      uint loadRow = gl_LocalInvocationID.y; 
+      for (uint j = 0; j < RESULTS_PER_THREAD; j ++) {
+         uint loadCol = j + gl_LocalInvocationID.x;
+         if (loadRow < TILE_SIZE && loadCol < TILE_SIZE) {
+               tileA[loadRow][loadCol] = dataA[(tileRow + loadRow) * MATRIX_SIZE + (k + loadCol)];
+               tileB[loadRow][loadCol] = dataB[(k + loadRow) * MATRIX_SIZE + (tileCol + loadCol)];
+         }
+      }
+      // Synchronize all threads in the workgroup for the tile to be completed
+      barrier();
 
-   //       if (globalRowBase < MATRIX_SIZE && (k + offsetCol) < MATRIX_SIZE) {
-   //          tileA[localRow][offsetCol] = dataA[globalRowBase * MATRIX_SIZE + (k + offsetCol)];
-   //       }
 
-   //       if ((k + localRow) < MATRIX_SIZE && (globalColBase + i) < MATRIX_SIZE) {
-   //          tileB[localRow][offsetCol] = dataB[(k + localRow) * MATRIX_SIZE + (globalColBase + i)];
-   //       }
-   //    }
+      uint row = localRow * RESULTS_PER_THREAD;
+      // // loop over the thread tile
+      for (uint t = 0; t < TILE_SIZE; t++) {
+         for (uint j = 0; j < RESULTS_PER_THREAD; ++j) {
+            uint col = localCol * RESULTS_PER_THREAD + j;
 
-   //    barrier();
+            if (row < TILE_SIZE && col < TILE_SIZE) {
+               result[j] += tileA[row][t] * tileB[t][col];
+            }
+         }
+      }
 
-   //    for (uint t = 0; t < TILE_SIZE; ++t) {
-   //       for (uint i = 0; i < RESULTS_PER_THREAD; ++i) {
-   //          uint col = localCol * RESULTS_PER_THREAD + i;
-   //          result[i] += tileA[localRow][t] * tileB[t][col];
-   //       }
-   //    }
+      barrier();
+   }
+   // write the final results
+   uint globalRow = globalRowBase;
+   for (uint j = 0; j < RESULTS_PER_THREAD; ++j) {
+      uint globalCol = globalColBase + j;
 
-   //    barrier();
-   // }
+      if (globalRow < MATRIX_SIZE && globalCol < MATRIX_SIZE) {
+            output_dataC[globalRow * MATRIX_SIZE + globalCol] = result[j];
+      }
+   }
 
-   // for (uint i = 0; i < RESULTS_PER_THREAD; ++i) {
-   //    uint globalCol = globalColBase + i;
-   //    if (globalRowBase < MATRIX_SIZE && globalCol < MATRIX_SIZE) {
-   //       output_dataC[globalRowBase * MATRIX_SIZE + globalCol] = result[i];
-   //    }
-   // }
 }

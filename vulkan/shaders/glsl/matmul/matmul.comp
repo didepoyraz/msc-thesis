@@ -1,23 +1,24 @@
 #version 450
 
+layout(set = 0, binding = 0) buffer MatrixA {
+    float A[];
+};
+layout(binding = 1) buffer MatrixB {
+    float B[];
+};
+layout(binding = 2) buffer MatrixC {
+    float C[];
+};
+
+
+layout (local_size_x = 8, local_size_y = 2, local_size_z = 1) in;
+
 
 layout (constant_id = 0) const int N = 0;
 layout (constant_id = 1) const int TS = 16;
 layout (constant_id = 2) const int WPT = 8;
-layout (constant_id = 3) const int RTS = TS / WPT;
+// layout (constant_id = 3) const int RTS = TS / WPT;
 
-layout (local_size_x_id = 1, local_size_y_id = 3, local_size_z = 1) in;
-
-
-layout(set = 0, binding = 0) readonly buffer MatrixA {
-    float A[];
-};
-layout(set = 0, binding = 1) readonly buffer MatrixB {
-    float B[];
-};
-layout(set = 0, binding = 2) writeonly buffer MatrixC {
-    float C[];
-};
 
 shared float Asub[TS][TS];
 shared float Bsub[TS][TS];
@@ -25,6 +26,8 @@ shared float Bsub[TS][TS];
 void main() {
     uint M = N;
     uint K = N;
+   //  uint WPT = 4;
+    uint RTS = TS / WPT; 
 
     uint row = gl_LocalInvocationID.x;
     uint col = gl_LocalInvocationID.y;

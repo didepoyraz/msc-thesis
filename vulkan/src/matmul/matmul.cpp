@@ -16,6 +16,8 @@
 
 uint32_t N = 10; // matrix size, default
 uint32_t TILE = 1;
+uint32_t WPT = 8;
+uint32_t RTS = 2;
 
 CommandLineParser commandLineParser;
 
@@ -394,16 +396,18 @@ public:
 			struct SpecializationData {
 				uint32_t MATRIX_SIZE = N;
 				uint32_t TILE_X = TILE;
-				uint32_t TILE_Y = 8;
+				uint32_t WPT_GPU = WPT;
+				uint32_t RTS_GPU = RTS;
 			} specializationData;
 
 			std::vector<VkSpecializationMapEntry> specializationMapEntries = {
 				{vks::initializers::specializationMapEntry(0, offsetof(SpecializationData, MATRIX_SIZE), sizeof(uint32_t))},
 				{vks::initializers::specializationMapEntry(1,offsetof(SpecializationData, TILE_X), sizeof(uint32_t))},
-				{vks::initializers::specializationMapEntry(2, offsetof(SpecializationData, TILE_Y), sizeof(uint32_t))},
+				{vks::initializers::specializationMapEntry(2, offsetof(SpecializationData, WPT_GPU), sizeof(uint32_t))},
+				{vks::initializers::specializationMapEntry(3, offsetof(SpecializationData, RTS_GPU), sizeof(uint32_t))},
 			};
 				VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(
-				3, specializationMapEntries.data(), sizeof(SpecializationData), &specializationData);
+				4, specializationMapEntries.data(), sizeof(SpecializationData), &specializationData);
 
 			std::string shaderDir = "glsl";
 			if (commandLineParser.isSet("shaders")) {
@@ -629,7 +633,10 @@ int main(int argc, char* argv[]) {
 	if (argc > 2) {
         N = std::atoi(argv[1]);
 		TILE = std::atoi(argv[2]);
+		WPT = std::atoi(argv[2]);
     }
+
+	RTS = TILE / WPT;
 
 	std::cout << "Using N = " << N << std::endl;
 

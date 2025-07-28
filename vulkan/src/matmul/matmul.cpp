@@ -397,26 +397,25 @@ public:
 			struct SpecializationData {
 				uint32_t MATRIX_SIZE = N;
 				uint32_t TILE_X = TILE;
-				uint32_t TILE_Y = TILE;
-				uint32_t THREAD_COUNT = TILE / RESULTS_PER_THREAD;
 				uint32_t RESULTS_PER_THREAD = RESULTS_PER_THREAD;
+				uint32_t THREAD_COUNT = TILE / RESULTS_PER_THREAD;
 			} specializationData;
 			LOG("THREAD_COUNT: (%i, %i)\n", TILE/RESULTS_PER_THREAD, TILE);
 			
-			specializationData.RESULTS_PER_THREAD = RESULTS_PER_THREAD;
-			specializationData.THREAD_COUNT = TILE / RESULTS_PER_THREAD;
+			// specializationData.RESULTS_PER_THREAD = RESULTS_PER_THREAD;
+			// specializationData.THREAD_COUNT = TILE / RESULTS_PER_THREAD;
 
-
+			LOG("Set the variables!\n");
 			std::vector<VkSpecializationMapEntry> specializationMapEntries = {
 				{vks::initializers::specializationMapEntry(0, offsetof(SpecializationData, MATRIX_SIZE), sizeof(uint32_t))},
 				{vks::initializers::specializationMapEntry(1,offsetof(SpecializationData, TILE_X), sizeof(uint32_t))},
-				{vks::initializers::specializationMapEntry(2, offsetof(SpecializationData, TILE_Y), sizeof(uint32_t))},
-				{vks::initializers::specializationMapEntry(3, offsetof(SpecializationData, THREAD_COUNT), sizeof(uint32_t))},
-				{vks::initializers::specializationMapEntry(4, offsetof(SpecializationData, RESULTS_PER_THREAD), sizeof(uint32_t))},
+				{vks::initializers::specializationMapEntry(2, offsetof(SpecializationData, RESULTS_PER_THREAD), sizeof(uint32_t))},
+				{vks::initializers::specializationMapEntry(3, offsetof(SpecializationData, THREAD_COUNT), sizeof(uint32_t))}
+
 			};
 				VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(
-				5, specializationMapEntries.data(), sizeof(SpecializationData), &specializationData);
-
+				4, specializationMapEntries.data(), sizeof(SpecializationData), &specializationData);
+			LOG("Set spec info!\n");
 			std::string shaderDir = "glsl";
 			if (commandLineParser.isSet("shaders")) {
 				shaderDir = commandLineParser.getValueAsString("shaders", "glsl");
@@ -426,17 +425,18 @@ public:
 			VkPipelineShaderStageCreateInfo shaderStage = {};
 			shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 			shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-
+			LOG("loaded shader!\n");
 			shaderStage.module = vks::tools::loadShader((shadersPath + "matmul.comp.spv").c_str(), device);
 
 			shaderStage.pName = "main";
 			shaderStage.pSpecializationInfo = &specializationInfo;
 			shaderModule = shaderStage.module;
-
+			LOG("Asserted shader!\n");
 			assert(shaderStage.module != VK_NULL_HANDLE);
 			computePipelineCreateInfo.stage = shaderStage;
+			LOG("Creating compute pipeline!\n");
 			VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &pipeline));
-
+			LOG("Created command buffer for compute operations!\n");
 			// Create a command buffer for compute operations
 			VkCommandBufferAllocateInfo cmdBufAllocateInfo =
 				vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
@@ -453,7 +453,7 @@ public:
 		{
 			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 
-		
+			LOG("Began command buffer!\n");
 			VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &cmdBufInfo));
 
 			vkCmdResetQueryPool(commandBuffer, queryPool, 0, 4);
@@ -499,7 +499,7 @@ public:
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, 0);
 
 			// vkCmdBeginQuery(commandBuffer, queryPool_mem, 0, 0); //another query pool for perf @ begin query
-
+			LOG("Dispatching to shader!\n");
 			vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPool, 1);
             // dispatch shader (2D, x=y=N, z=1)
 			vkCmdDispatch(commandBuffer, N/TILE, N/TILE, 1);

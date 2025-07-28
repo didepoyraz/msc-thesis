@@ -1,95 +1,79 @@
 #version 450
 
-layout(set = 0, binding = 0) buffer MatrixA {
-   float dataA[];
+
+layout (constant_id = 0) const int N = 0;
+layout (constant_id = 1) const int TS = 16;
+layout (constant_id = 2) const int WPT = 8;
+layout (constant_id = 3) const int RTS = TS / WPT;
+
+layout (local_size_x_id = 1, local_size_y_id = 3, local_size_z = 1) in;
+
+
+layout(set = 0, binding = 0) readonly buffer MatrixA {
+    float A[];
+};
+layout(set = 0, binding = 1) readonly buffer MatrixB {
+    float B[];
+};
+layout(set = 0, binding = 2) writeonly buffer MatrixC {
+    float C[];
 };
 
-layout(binding = 1) buffer MatrixB {
-   float dataB[];
-};
-
-layout(binding = 2) buffer MatrixC {
-   float output_dataC[];
-};
-
-layout (constant_id = 0) const uint MATRIX_SIZE = 1024;
-layout (constant_id = 1) const uint TILE_SIZE = 16; 
-layout (constant_id = 3) const uint THREADS_PER_TILE_DIM = 2;
-layout (constant_id = 4) const uint RESULTS_PER_THREAD = 8;
-
-layout (local_size_x_id = 3, local_size_y_id = 1, local_size_z = 1) in; // each thread will calculate a 2x2 output
-
-
-// layout (local_size_x = 1, local_size_y = 4, local_size_z = 1) in; // each thread will calculate a 2x2 output
-
-shared float tileA[TILE_SIZE][TILE_SIZE];
-shared float tileB[TILE_SIZE][TILE_SIZE];
+shared float Asub[TS][TS];
+shared float Bsub[TS][TS];
 
 void main() {
+    uint M = N;
+    uint K = N;
 
-   // uvec2 gid = gl_GlobalInvocationID.xy;
-   // float resul
-   //  // each thread handles a TILE / RESULTS_PER_THREAD tile
-   //  // compute the starting cell for this tile
-   // uint base_x = gid.x* RESULTS_PER_THREAD;
-   // uint base_y = gid.y*RESULTS_PER_THREAD;
-
-   uint globalRowBase = gl_GlobalInvocationID.y * RESULTS_PER_THREAD;
-   uint globalColBase = gl_GlobalInvocationID.x * RESULTS_PER_THREAD;
-
-   uint localRow = gl_LocalInvocationID.y; // this is the location in the thread group, so the layout local size
-   uint localCol = gl_LocalInvocationID.x;
+    uint row = gl_LocalInvocationID.x;
+    uint col = gl_LocalInvocationID.y;
+    uint globalRow = TS * gl_WorkGroupID.x + row;
+    uint globalCol = TS * gl_WorkGroupID.y + col;
 
 
-   float result[RESULTS_PER_THREAD];
-   for (uint i = 0; i < RESULTS_PER_THREAD; ++i) {
-         result[i]= 123.0;
-      }
-
-   uint tileRow = gl_WorkGroupID.y * TILE_SIZE;
-   uint tileCol = gl_WorkGroupID.x * TILE_SIZE;
-
-   // uint globalRow = gl_GlobalInvocationID.x;
-   // uint globalCol = gl_GlobalInvocationID.y;
-
-   // output_dataC[globalRow * MATRIX_SIZE + globalCol] = 123;
-   
-   for (uint k = 0; k < MATRIX_SIZE; k += TILE_SIZE) {
-
-      uint loadRow = gl_LocalInvocationID.y; 
-      for (uint j = 0; j < RESULTS_PER_THREAD; j ++) {
-         uint loadCol = j + gl_LocalInvocationID.x;
-         if (loadRow < TILE_SIZE && loadCol < TILE_SIZE) {
-               tileA[loadRow][loadCol] = dataA[(tileRow + loadRow) * MATRIX_SIZE + (k + loadCol)];
-               tileB[loadRow][loadCol] = dataB[(k + loadRow) * MATRIX_SIZE + (tileCol + loadCol)];
-         }
-      }
-      // Synchronize all threads in the workgroup for the tile to be completed
-      barrier();
+    float acc[WPT];
+    for (int w = 0; w < WPT; w++) {
+        acc[w] = 0.0;
+    }
 
 
-      uint row = localRow * RESULTS_PER_THREAD;
-      // // loop over the thread tile
-      for (uint t = 0; t < TILE_SIZE; t++) {
-         for (uint j = 0; j < RESULTS_PER_THREAD; ++j) {
-            uint col = localCol * RESULTS_PER_THREAD + j;
+    uint numTiles = K / TS;
 
-            if (row < TILE_SIZE && col < TILE_SIZE) {
-               result[j] += tileA[row][t] * tileB[t][col];
+    for (uint t = 0; t < numTiles; t++) {
+        uint tiledRow = TS * t + row;
+        uint tiledCol = TS * t + col;
+
+        // Load tiles into shared memory
+        for (int w = 0; w < WPT; w++) {
+            uint aIndex = globalRow * K + (tiledCol + w * RTS);
+            uint bIndex = tiledRow * N + (globalCol + w * RTS);
+
+            if (globalRow < M && globalCol + w*RTS < N) {
+               Asub[row][col + w*RTS] = A[aIndex];
+               Bsub[row][col + w*RTS] = B[bIndex];
             }
+        }
+
+        // Synchronise threads within the workgroup
+        barrier();
+
+        // Perform multiplication on this tile
+        for (uint k = 0; k < TS; k++) {
+            for (int w = 0; w < WPT; w++) {
+                acc[w] += Asub[row][k] * Bsub[k][col + w * RTS];
+            }
+        }
+
+        // Wait before loading next tile
+        barrier();
+    }
+
+    // Write results back to global memory
+    for (int w = 0; w < WPT; w++) {
+        uint cIndex = globalRow * N + (globalCol + w * RTS);
+        if (globalRow < M && globalCol + w*RTS < N) {
+            C[cIndex] = acc[w];
          }
-      }
-
-      barrier();
-   }
-   // write the final results
-   uint globalRow = globalRowBase;
-   for (uint j = 0; j < RESULTS_PER_THREAD; ++j) {
-      uint globalCol = globalColBase + j;
-
-      if (globalRow < MATRIX_SIZE && globalCol < MATRIX_SIZE) {
-            output_dataC[globalRow * MATRIX_SIZE + globalCol] = result[j];
-      }
-   }
-
+    }
 }

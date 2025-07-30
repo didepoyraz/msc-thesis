@@ -29,6 +29,7 @@ void* cpu_worker(void* arg){
     TileConfig tile;
     DEBUG_PRINT("\nCPU threads starting up!");
 
+    // TODO: add a lock to each output element of C
     while(dequeue_tile(q, &tile)) {
         obj_t A_blis, B_blis, C_blis;
         
@@ -48,7 +49,7 @@ void* gpu_worker(void* arg){
     TileQueue* q = (TileQueue*) arg;
     TileConfig tile;
     DEBUG_PRINT("\nGPU thread starting up!");
-
+    // TODO: add a lock to each output element of C
     while(dequeue_tile(q, &tile)) {
         DEBUG_PRINT("\n++++ GPU is submitting tile: A(%i, %i), B(%i, %i), C(%i, %i) ++++\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
         vulkan_submit_tile(tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);

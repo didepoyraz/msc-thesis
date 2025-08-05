@@ -53,10 +53,13 @@ public:
 	
 	VkQueue queue;
 	VkCommandPool commandPool;
-	VkCommandBuffer commandBuffer;
+	// VkCommandBuffer commandBuffer;
 	
+	VkCommandBuffer computeCmdBuf; // persistent command buffer
+	VkFence computeFence;          // persistent fence
+
 	VkPipelineCache pipelineCache;
-	VkFence fence;
+	// VkFence fence;
 	VkDescriptorPool descriptorPool;
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorSet descriptorSet;
@@ -223,6 +226,16 @@ public:
 		queryPoolCreateInfo.queryCount = 4;
 		queryPoolCreateInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
 		VK_CHECK_RESULT(vkCreateQueryPool(device, &queryPoolCreateInfo, nullptr, &queryPool));
+
+		// reusable command buffer
+		VkCommandBufferAllocateInfo cmdBufAllocateInfo =
+			vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
+		VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &computeCmdBuf));
+
+		// reusable fence
+		VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+		VK_CHECK_RESULT(vkCreateFence(device, &fenceInfo, nullptr, &computeFence));
+
 	}
 
 	void generateMatrixBuffersAndCopyToDev(float* inputA, float* inputB, float* outputC, uint32_t ldN, uint32_t N) {
@@ -448,50 +461,45 @@ public:
 	}
 
 	void submitComputeWork(const PushConstants& pc) {
-		// Allocate new command buffer
-		VkCommandBufferAllocateInfo cmdBufAllocateInfo = 
-			vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
-		VkCommandBuffer cmdBuf;
-		VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &cmdBuf));
+		// Reset fence and command buffer for reuse
+		VK_CHECK_RESULT(vkResetFences(device, 1, &computeFence));
+		VK_CHECK_RESULT(vkResetCommandBuffer(computeCmdBuf, 0));
 
 		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
-		VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuf, &cmdBufInfo));
+		VK_CHECK_RESULT(vkBeginCommandBuffer(computeCmdBuf, &cmdBufInfo));
 
-		vkCmdResetQueryPool(cmdBuf, queryPool, 0, 4);
-		vkCmdWriteTimestamp(cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPool, 0);
+		vkCmdResetQueryPool(computeCmdBuf, queryPool, 0, 4);
+		vkCmdWriteTimestamp(computeCmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPool, 0);
 
-		// Bind compute pipeline and descriptor set
-		vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
-		vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+		// Bind pipeline + descriptor set
+		vkCmdBindPipeline(computeCmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+		vkCmdBindDescriptorSets(computeCmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE,
+								pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
 		// Push constants
-		vkCmdPushConstants(cmdBuf, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstants), &pc);
+		vkCmdPushConstants(computeCmdBuf, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT,
+						0, sizeof(PushConstants), &pc);
 
-		vkCmdWriteTimestamp(cmdBuf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, queryPool, 1);
-		vkCmdDispatch(cmdBuf, N / TILE, N / TILE, 1);
-		vkCmdWriteTimestamp(cmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, queryPool, 2);
+		vkCmdWriteTimestamp(computeCmdBuf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, queryPool, 1);
+		vkCmdDispatch(computeCmdBuf, N / TILE, N / TILE, 1);
+		vkCmdWriteTimestamp(computeCmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, queryPool, 2);
 
-		// Copy back to host
+		// Copy result to host buffer
 		VkBufferCopy copyRegion = {};
 		copyRegion.size = bufferSize;
-		vkCmdCopyBuffer(cmdBuf, deviceBufferC, hostBufferC, 1, &copyRegion);
+		vkCmdCopyBuffer(computeCmdBuf, deviceBufferC, hostBufferC, 1, &copyRegion);
 
 		// Final timestamp
-		vkCmdWriteTimestamp(cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool, 3);
+		vkCmdWriteTimestamp(computeCmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool, 3);
 
-		VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuf));
+		VK_CHECK_RESULT(vkEndCommandBuffer(computeCmdBuf));
 
-		// Submit
-		VkFence computeFence;
-		VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo();
-		VK_CHECK_RESULT(vkCreateFence(device, &fenceInfo, nullptr, &computeFence));
-
+		// Submit and wait
 		VkSubmitInfo submitInfo = vks::initializers::submitInfo();
 		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &cmdBuf;
+		submitInfo.pCommandBuffers = &computeCmdBuf;
 		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, computeFence));
 		VK_CHECK_RESULT(vkWaitForFences(device, 1, &computeFence, VK_TRUE, UINT64_MAX));
-		vkDestroyFence(device, computeFence, nullptr);
 
 		// Copy from mapped to C matrix
 		void* mapped;
@@ -501,33 +509,30 @@ public:
 		mappedRange.offset = 0;
 		mappedRange.size = VK_WHOLE_SIZE;
 		vkInvalidateMappedMemoryRanges(device, 1, &mappedRange);
+
 		float* fdata = static_cast<float*>(mapped);
 
 		// LOG("\nmapped: ");
-		// for (int i = 0; i < 16; ++i) {
-		// 	printf(": %f\t", fdata[i]);
-		// }
-		// LOG("\n--------------\nMatrix C before adding mapped: \n");
-		// for (int i = 0; i < 16; ++i) {
-		// 	printf(": %f\t", outC[i]);
-		// }
-		// LOG("\n\n");
+        // for (int i = 0; i < 16; ++i) {
+        //  printf(": %f\t", fdata[i]);
+        // }
+        // LOG("\n--------------\nMatrix C before adding mapped: \n");
+        // for (int i = 0; i < 16; ++i) {
+        //  printf(": %f\t", outC[i]);
+        // }
+        // LOG("\n\n");
 
 		for (int r = 0; r < N; ++r) {
 			for (int c = 0; c < N; ++c) {
 				int idx = (pc.offsetRowC + r) * ldN + (pc.offsetColC + c);
-				outC[idx] += ((float*)mapped)[idx];
+				outC[idx] += fdata[idx];
 			}
 		}
-
-		//TODO: you need to flush it to the GPU otherwise this is not going to be
-		// set to 0 when you only do memset.
+		 //TODO: you need to flush it to the GPU otherwise this is not going to be
+        // set to 0 when you only do memset.
 		memset(mapped, 0, ldN * ldN * sizeof(float));
-
 		vkUnmapMemory(device, hostMemoryC);
 
-		// Cleanup
-		vkFreeCommandBuffers(device, commandPool, 1, &cmdBuf);
 		queryTimestamps();
 	}
 
@@ -560,7 +565,8 @@ public:
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 		vkDestroyPipeline(device, pipeline, nullptr);
 		vkDestroyPipelineCache(device, pipelineCache, nullptr);
-		vkDestroyFence(device, fence, nullptr);
+		// vkDestroyFence(device, fence, nullptr);
+		vkDestroyFence(device, computeFence, nullptr);
 		vkDestroyCommandPool(device, commandPool, nullptr);
 		vkDestroyShaderModule(device, shaderModule, nullptr);
 		vkDestroyDevice(device, nullptr);

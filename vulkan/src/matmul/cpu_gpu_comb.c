@@ -98,14 +98,16 @@ int main(int argc, char* argv[]) {
     pthread_mutex_init(&queue.lock, NULL);
     pthread_cond_init(&queue.not_empty, NULL);
 
-    clock_gettime(CLOCK_MONOTONIC, &start);
-
+    clock_gettime(CLOCK_MONOTONIC, &tic);
     vulkan_init(A, B, C, N, BLOCK_SIZE);
+    clock_gettime(CLOCK_MONOTONIC, &toc);
+
     bli_init(); 
 
     DEBUG_PRINT("initialising threads!\n");
 
-    
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
     pthread_t threads[NUM_THREADS];
 
     // CPU threads
@@ -142,13 +144,20 @@ int main(int argc, char* argv[]) {
     }
 
     clock_gettime(CLOCK_MONOTONIC, &end);
+
     elapsed_full_execution = (end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);
-    printf("Total Compute Time: %f ns \n", elapsed_full_execution);
+    elapsed = (toc.tv_sec - tic.tv_sec) * 1000000000LL + (toc.tv_nsec - tic.tv_nsec);
+
+    printf("Vulkan Setup Time: %f ns \n", elapsed);
+    printf("Compute Time: %f ns \n", elapsed_full_execution);
+    printf("Total Execution Time: %f ns \n", (elapsed_full_execution + elapsed));
+
     printf("GPU has completed %i tiles and the CPU has completed %i tiles.\n", gpu_counter, cpu_counter);
+
+
     // printf("Resulting Matrix: \n");
     // print_first_row_matrix_float(C, N);
     printf("matrix c first element %f, last element %f", C[0], C[(N*N)-1]);
-    // printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
     vulkan_print_total_time();
 
     char filename[128];

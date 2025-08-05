@@ -167,6 +167,16 @@ int main(int argc, char* argv[]) {
     printf("filename: %s", filename );
     save_matrix_to_file(filename, C, N);
 
+    char file_execution[128];
+    char* s_execution = "/home/pi/Desktop/msc-thesis/vulkan/results/execution_time";
+
+    save_value_to_file(s_execution, (elapsed_full_execution+elapsed));
+    
+    char file_compute[128];
+    char* s_compute = "/home/pi/Desktop/msc-thesis/vulkan/results/compute_time";
+
+    save_value_to_file(s_compute, elapsed_full_execution);
+
     // free everything
     free(A); free(B); free(C);
 

@@ -47,3 +47,19 @@ void save_matrix_to_file(const char* filename, float* matrix, int N) {
     fclose(fp);
     printf("Matrix saved to %s\n", filename);
 }
+
+void save_value_to_file(const char* filename, float value) {
+    FILE* fp = fopen(filename, "a");
+    if (!fp) {
+        perror("Error opening file for writing");
+        return;
+    }
+
+    if (fp) {
+        fprintf(fp, "%.6f, ", value);
+        fclose(fp);
+
+    } else {
+        perror("Error opening timings.csv");
+    }
+}

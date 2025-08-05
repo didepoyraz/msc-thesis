@@ -53,13 +53,10 @@ public:
 	
 	VkQueue queue;
 	VkCommandPool commandPool;
-	// VkCommandBuffer commandBuffer;
+	VkCommandBuffer commandBuffer;
 	
-	VkCommandBuffer computeCmdBuf; // persistent command buffer
-	VkFence computeFence;          // persistent fence
-
 	VkPipelineCache pipelineCache;
-	// VkFence fence;
+	VkFence fence;
 	VkDescriptorPool descriptorPool;
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorSet descriptorSet;
@@ -161,7 +158,7 @@ public:
 		return VK_SUCCESS;
 	}
 
-	void vkInit(){
+	void vkInit(float* inputA, float* inputB, float* outputC, uint32_t ldN, uint32_t N){
 
 		VkApplicationInfo appInfo = {};
 		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -174,9 +171,7 @@ public:
 		instanceCreateInfo.pApplicationInfo = &appInfo;
 
 		VK_CHECK_RESULT(vkCreateInstance(&instanceCreateInfo, nullptr, &instance));
-	}
 
-	void pickPhysicalDevAndQueue() {
 		uint32_t deviceCount = 0;
 		VK_CHECK_RESULT(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr));
 		std::vector<VkPhysicalDevice> physicalDevices(deviceCount);
@@ -194,9 +189,7 @@ public:
 				break;
 			}
 		}
-	}
 
-	void createLogicalDevAndQueue() {
 		const float defaultQueuePriority(1.0f);
 		VkDeviceQueueCreateInfo queueCreateInfo = {};
 
@@ -212,10 +205,8 @@ public:
 		
 		VK_CHECK_RESULT(vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device));
     	vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
-	}
 
-	void createCommandAndQueryPool() {
-		  VkCommandPoolCreateInfo cmdPoolInfo = {};
+		VkCommandPoolCreateInfo cmdPoolInfo = {};
 		cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 		cmdPoolInfo.queueFamilyIndex = queueFamilyIndex;
 		cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -227,18 +218,7 @@ public:
 		queryPoolCreateInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
 		VK_CHECK_RESULT(vkCreateQueryPool(device, &queryPoolCreateInfo, nullptr, &queryPool));
 
-		// reusable command buffer
-		VkCommandBufferAllocateInfo cmdBufAllocateInfo =
-			vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
-		VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &computeCmdBuf));
-
-		// reusable fence
-		VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-		VK_CHECK_RESULT(vkCreateFence(device, &fenceInfo, nullptr, &computeFence));
-
-	}
-
-	void generateMatrixBuffersAndCopyToDev(float* inputA, float* inputB, float* outputC, uint32_t ldN, uint32_t N) {
+	
 		inA = inputA;
 		inB = inputB;
 		outC = outputC;
@@ -348,9 +328,6 @@ public:
 		vkDestroyFence(device, fence, nullptr);
 		vkFreeCommandBuffers(device, commandPool, 1, &copyCmd);
 
-	}
-
-	void createComputePipeline() {
 		// 2 storage buffers for input + 1 for output
 		std::vector<VkDescriptorPoolSize> poolSizes = {
 			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3),
@@ -461,45 +438,50 @@ public:
 	}
 
 	void submitComputeWork(const PushConstants& pc) {
-		// Reset fence and command buffer for reuse
-		VK_CHECK_RESULT(vkResetFences(device, 1, &computeFence));
-		VK_CHECK_RESULT(vkResetCommandBuffer(computeCmdBuf, 0));
+		// Allocate new command buffer
+		VkCommandBufferAllocateInfo cmdBufAllocateInfo = 
+			vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
+		VkCommandBuffer cmdBuf;
+		VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &cmdBuf));
 
 		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
-		VK_CHECK_RESULT(vkBeginCommandBuffer(computeCmdBuf, &cmdBufInfo));
+		VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuf, &cmdBufInfo));
 
-		vkCmdResetQueryPool(computeCmdBuf, queryPool, 0, 4);
-		vkCmdWriteTimestamp(computeCmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPool, 0);
+		vkCmdResetQueryPool(cmdBuf, queryPool, 0, 4);
+		vkCmdWriteTimestamp(cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPool, 0);
 
-		// Bind pipeline + descriptor set
-		vkCmdBindPipeline(computeCmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
-		vkCmdBindDescriptorSets(computeCmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE,
-								pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+		// Bind compute pipeline and descriptor set
+		vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+		vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
 		// Push constants
-		vkCmdPushConstants(computeCmdBuf, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT,
-						0, sizeof(PushConstants), &pc);
+		vkCmdPushConstants(cmdBuf, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstants), &pc);
 
-		vkCmdWriteTimestamp(computeCmdBuf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, queryPool, 1);
-		vkCmdDispatch(computeCmdBuf, N / TILE, N / TILE, 1);
-		vkCmdWriteTimestamp(computeCmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, queryPool, 2);
+		vkCmdWriteTimestamp(cmdBuf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, queryPool, 1);
+		vkCmdDispatch(cmdBuf, N / TILE, N / TILE, 1);
+		vkCmdWriteTimestamp(cmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, queryPool, 2);
 
-		// Copy result to host buffer
+		// Copy back to host
 		VkBufferCopy copyRegion = {};
 		copyRegion.size = bufferSize;
-		vkCmdCopyBuffer(computeCmdBuf, deviceBufferC, hostBufferC, 1, &copyRegion);
+		vkCmdCopyBuffer(cmdBuf, deviceBufferC, hostBufferC, 1, &copyRegion);
 
 		// Final timestamp
-		vkCmdWriteTimestamp(computeCmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool, 3);
+		vkCmdWriteTimestamp(cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool, 3);
 
-		VK_CHECK_RESULT(vkEndCommandBuffer(computeCmdBuf));
+		VK_CHECK_RESULT(vkEndCommandBuffer(cmdBuf));
 
-		// Submit and wait
+		// Submit
+		VkFence computeFence;
+		VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo();
+		VK_CHECK_RESULT(vkCreateFence(device, &fenceInfo, nullptr, &computeFence));
+
 		VkSubmitInfo submitInfo = vks::initializers::submitInfo();
 		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &computeCmdBuf;
+		submitInfo.pCommandBuffers = &cmdBuf;
 		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, computeFence));
 		VK_CHECK_RESULT(vkWaitForFences(device, 1, &computeFence, VK_TRUE, UINT64_MAX));
+		vkDestroyFence(device, computeFence, nullptr);
 
 		// Copy from mapped to C matrix
 		void* mapped;
@@ -509,30 +491,33 @@ public:
 		mappedRange.offset = 0;
 		mappedRange.size = VK_WHOLE_SIZE;
 		vkInvalidateMappedMemoryRanges(device, 1, &mappedRange);
-
 		float* fdata = static_cast<float*>(mapped);
 
 		// LOG("\nmapped: ");
-        // for (int i = 0; i < 16; ++i) {
-        //  printf(": %f\t", fdata[i]);
-        // }
-        // LOG("\n--------------\nMatrix C before adding mapped: \n");
-        // for (int i = 0; i < 16; ++i) {
-        //  printf(": %f\t", outC[i]);
-        // }
-        // LOG("\n\n");
+		// for (int i = 0; i < 16; ++i) {
+		// 	printf(": %f\t", fdata[i]);
+		// }
+		// LOG("\n--------------\nMatrix C before adding mapped: \n");
+		// for (int i = 0; i < 16; ++i) {
+		// 	printf(": %f\t", outC[i]);
+		// }
+		// LOG("\n\n");
 
 		for (int r = 0; r < N; ++r) {
 			for (int c = 0; c < N; ++c) {
 				int idx = (pc.offsetRowC + r) * ldN + (pc.offsetColC + c);
-				outC[idx] += fdata[idx];
+				outC[idx] += ((float*)mapped)[idx];
 			}
 		}
-		 //TODO: you need to flush it to the GPU otherwise this is not going to be
-        // set to 0 when you only do memset.
+
+		//TODO: you need to flush it to the GPU otherwise this is not going to be
+		// set to 0 when you only do memset.
 		memset(mapped, 0, ldN * ldN * sizeof(float));
+
 		vkUnmapMemory(device, hostMemoryC);
 
+		// Cleanup
+		vkFreeCommandBuffers(device, commandPool, 1, &cmdBuf);
 		queryTimestamps();
 	}
 
@@ -565,8 +550,7 @@ public:
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 		vkDestroyPipeline(device, pipeline, nullptr);
 		vkDestroyPipelineCache(device, pipelineCache, nullptr);
-		// vkDestroyFence(device, fence, nullptr);
-		vkDestroyFence(device, computeFence, nullptr);
+		vkDestroyFence(device, fence, nullptr);
 		vkDestroyCommandPool(device, commandPool, nullptr);
 		vkDestroyShaderModule(device, shaderModule, nullptr);
 		vkDestroyDevice(device, nullptr);
@@ -597,16 +581,16 @@ extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t
 
 	vkInstance = new VulkanExample();
 	
-	vkInstance->vkInit();                          // Vulkan instance
-    vkInstance->pickPhysicalDevAndQueue();         // Pick GPU and queue family
-    vkInstance->createLogicalDevAndQueue();        // Create logical device and queue
-    vkInstance->createCommandAndQueryPool();       // Command pool and timestamp pool
+	vkInstance->vkInit(A, B, C, ldN, N);                          // Vulkan instance
+    // vkInstance->pickPhysicalDevAndQueue();         // Pick GPU and queue family
+    // vkInstance->createLogicalDevAndQueue();        // Create logical device and queue
+    // vkInstance->createCommandAndQueryPool();       // Command pool and timestamp pool
 
-	//Create buffers and upload input matrices
-    vkInstance->generateMatrixBuffersAndCopyToDev(A, B, C, ldN, N);
+	// //Create buffers and upload input matrices
+    // vkInstance->generateMatrixBuffersAndCopyToDev(A, B, C, ldN, N);
 
-    //Create compute pipeline and descriptor sets
-    vkInstance->createComputePipeline();
+    // //Create compute pipeline and descriptor sets
+    // vkInstance->createComputePipeline();
 	LOG("Finished Initialisation\n");
 }
 

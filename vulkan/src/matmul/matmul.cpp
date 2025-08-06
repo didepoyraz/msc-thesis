@@ -549,7 +549,7 @@ public:
 
 		//TODO: you need to flush it to the GPU otherwise this is not going to be
         // set to 0 when you only do memset.
-		memset(mapped, 0, ldN * ldN * sizeof(float));
+		// memset(mapped, 0, ldN * ldN * sizeof(float));
 		vkUnmapMemory(device, hostMemoryC);
 
 		queryTimestamps();

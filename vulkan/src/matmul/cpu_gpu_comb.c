@@ -10,7 +10,7 @@
 int cpu_counter = 0;
 int gpu_counter = 0;
 
-#define DEBUG_MODE 1
+#define DEBUG_MODE 0
 
 
 #if DEBUG_MODE 
@@ -33,12 +33,18 @@ void* cpu_worker(void* arg){
     // TODO: add a lock to each output element of C
     while(dequeue_tile(q, &tile)) {
         obj_t A_blis, B_blis, C_blis;
-        
-        DEBUG_PRINT("\n***** CPU is submitting tile: A(%i, %i), B(%i, %i), C(%i, %i) *****\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-
         int idx = tileIndex(tile.i, tile.j, q->matrix.BLOCK_SIZE,q->matrix.N);
 
-        pthread_mutex_lock(&q->C_locks[idx]);
+
+        
+        DEBUG_PRINT("\n***** CPU is submitting tile: A(%i, %i), B(%i, %i), C(%i, %i), index: %i *****\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j, idx);
+
+        // pthread_mutex_lock(&q->C_locks[idx]);
+        int rc = pthread_mutex_trylock(&q->C_locks[idx]);
+        if (rc == EBUSY) {
+            DEBUG_PRINT("Tile %d already locked, thread %lu waiting...\n", idx, pthread_self());
+            pthread_mutex_lock(&q->C_locks[idx]);
+        }
         bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.A + offsetA(tile.i, tile.p, q->matrix.N), q->matrix.N, 1, &A_blis);
         bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.B + offsetB(tile.p, tile.j, q->matrix.N), q->matrix.N, 1, &B_blis);
         bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.C + offsetC(tile.i, tile.j, q->matrix.N), q->matrix.N, 1, &C_blis);
@@ -81,7 +87,7 @@ int main(int argc, char* argv[]) {
         BLOCK_SIZE = atoi(argv[2]);
     }
     // int ldN = N;
- 
+    bli_thread_set_num_threads(1);
     double elapsed_full_execution = 0;
     struct timespec start, end;
 
@@ -182,6 +188,17 @@ int main(int argc, char* argv[]) {
     
     printf("filename: %s", filename );
     save_matrix_to_file(filename, C, N);
+
+    char file_execution[128];
+    char* s_execution = "/home/pi/Desktop/msc-thesis/vulkan/results/execution_time";
+
+    save_value_to_file(s_execution, (elapsed_full_execution+elapsed));
+    
+    char file_compute[128];
+    char* s_compute = "/home/pi/Desktop/msc-thesis/vulkan/results/compute_time";
+
+    save_value_to_file(s_compute, elapsed_full_execution);
+
 
     // free everything
     free(A); free(B); free(C);

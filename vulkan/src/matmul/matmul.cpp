@@ -229,6 +229,9 @@ public:
 		std::vector<float> Input_MatrixA(inA, inA + ldN * ldN);
 		// matrix B
 		std::vector<float> Input_MatrixB(inB, inB + ldN * ldN);
+		// float* A_data = static_cast<float*>(std::aligned_alloc(16, ldN *  ldN * sizeof(float)));
+		// float* B_data = static_cast<float*>(std::aligned_alloc(16, ldN *  ldN* sizeof(float)));
+		// float* C_data = static_cast<float*>(std::aligned_alloc(16, matrix_size * matrix_size * sizeof(float)));
 
 		bufferSize = ldN * ldN * sizeof(float);
 

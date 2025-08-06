@@ -9,6 +9,7 @@
 #include "vulkan_matmul.h"
 #include <vulkan/vulkan.h>
 #include "VulkanTools.h"
+#include <pthread.h>
 #include "CommandLineParser.hpp"
 
 
@@ -44,7 +45,8 @@ public:
 	uint32_t N;
 	uint32_t ldN;
 	uint32_t TILE;
-
+	pthread_mutex_t* C_locks = nullptr;
+	
 	float* mappedHostC = nullptr;
 	VkInstance instance;
 	VkPhysicalDevice physicalDevice;
@@ -158,7 +160,7 @@ public:
 		return VK_SUCCESS;
 	}
 
-	void vkInit(float* inputA, float* inputB, float* outputC, uint32_t ldN, uint32_t N){
+	void vkInit(float* inputA, float* inputB, float* outputC, uint32_t ldN, uint32_t N, pthread_mutex_t* locks){
 
 		VkApplicationInfo appInfo = {};
 		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -224,6 +226,7 @@ public:
 		outC = outputC;
 		this->ldN = ldN;
 		this->N = N;
+		this->C_locks = locks;
 
 		// matrix A
 		std::vector<float> Input_MatrixA(inA, inA + ldN * ldN);
@@ -505,13 +508,18 @@ public:
 		// 	printf(": %f\t", outC[i]);
 		// }
 		// LOG("\n\n");
+		int tile_row = pc.offsetRowC / N;
+		int tile_col = pc.offsetColC / N;
+		int tile_index = tile_row * (ldN / N) + tile_col; // (ldN/N) is to find the number of blocks
 
+		pthread_mutex_lock(&C_locks[tile_index]);
 		for (int r = 0; r < N; ++r) {
 			for (int c = 0; c < N; ++c) {
 				int idx = (pc.offsetRowC + r) * ldN + (pc.offsetColC + c);
 				outC[idx] += ((float*)mapped)[idx];
 			}
 		}
+		pthread_mutex_unlock(&C_locks[tile_index]);
 
 		//TODO: you need to flush it to the GPU otherwise this is not going to be
 		// set to 0 when you only do memset.
@@ -570,7 +578,7 @@ public:
 
 static VulkanExample* vkInstance = nullptr;
 
-extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t N) {
+extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t N, pthread_mutex_t* locks) {
     
 	if (vkInstance) {
 		delete vkInstance;
@@ -584,7 +592,7 @@ extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t
 
 	vkInstance = new VulkanExample();
 	
-	vkInstance->vkInit(A, B, C, ldN, N);                          // Vulkan instance
+	vkInstance->vkInit(A, B, C, ldN, N, locks);                          // Vulkan instance
     // vkInstance->pickPhysicalDevAndQueue();         // Pick GPU and queue family
     // vkInstance->createLogicalDevAndQueue();        // Create logical device and queue
     // vkInstance->createCommandAndQueryPool();       // Command pool and timestamp pool

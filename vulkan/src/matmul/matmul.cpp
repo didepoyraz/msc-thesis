@@ -10,7 +10,7 @@
 #include <vulkan/vulkan.h>
 #include "VulkanTools.h"
 #include "CommandLineParser.hpp"
-
+#include <pthread.h>
 
 #define LOG(...) printf(__VA_ARGS__)
 
@@ -44,6 +44,7 @@ public:
 	uint32_t N;
 	uint32_t ldN;
 	uint32_t TILE;
+	pthread_mutex_t* C_locks = nullptr;
 
 	float* mappedHostC = nullptr;
 	VkInstance instance;
@@ -75,6 +76,7 @@ public:
 	uint64_t totalComputeTime = 0;
 	uint64_t totalTransferTime = 0;
 	uint64_t totalTime = 0;
+
 
 
 	/*
@@ -238,12 +240,13 @@ public:
 
 	}
 
-	void generateMatrixBuffersAndCopyToDev(float* inputA, float* inputB, float* outputC, uint32_t ldN, uint32_t N) {
+	void generateMatrixBuffersAndCopyToDev(float* inputA, float* inputB, float* outputC, uint32_t ldN, uint32_t N, pthread_mutex_t* locks) {
 		inA = inputA;
 		inB = inputB;
 		outC = outputC;
 		this->ldN = ldN;
 		this->N = N;
+		this->C_locks = locks;
 
 		// matrix A
 		std::vector<float> Input_MatrixA(inA, inA + ldN * ldN);
@@ -522,13 +525,29 @@ public:
         // }
         // LOG("\n\n");
 
-		for (int r = 0; r < N; ++r) {
-			for (int c = 0; c < N; ++c) {
-				int idx = (pc.offsetRowC + r) * ldN + (pc.offsetColC + c);
-				outC[idx] += fdata[idx];
+		int tile_row = pc.offsetRowC / TILE;
+		int tile_col = pc.offsetColC / TILE;
+		int tile_index = tile_row * (N / TILE) + tile_col; // (N/TILE) is to find the number of tiles within our matrix 
+
+				
+		pthread_mutex_lock(&C_locks[tile_index]);
+		for (int r = 0; r < TILE; ++r) {
+			for (int c = 0; c < TILE; ++c) {
+				int idxC = (pc.offsetRowC + r) * ldN + (pc.offsetColC + c);
+				int idxF = r * TILE + c; // fdata is TILE × TILE
+				outC[idxC] += fdata[idxF];
 			}
 		}
-		 //TODO: you need to flush it to the GPU otherwise this is not going to be
+		pthread_mutex_unlock(&C_locks[tile_index]);
+
+		// for (int r = 0; r < N; ++r) {
+		// 	for (int c = 0; c < N; ++c) {
+		// 		int idx = (pc.offsetRowC + r) * ldN + (pc.offsetColC + c);
+		// 		outC[idx] += fdata[idx];
+		// 	}
+		// }
+
+		//TODO: you need to flush it to the GPU otherwise this is not going to be
         // set to 0 when you only do memset.
 		memset(mapped, 0, ldN * ldN * sizeof(float));
 		vkUnmapMemory(device, hostMemoryC);
@@ -583,7 +602,7 @@ public:
 
 static VulkanExample* vkInstance = nullptr;
 
-extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t N) {
+extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t N, pthread_mutex_t* locks) {
     
 	if (vkInstance) {
 		delete vkInstance;
@@ -596,14 +615,13 @@ extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t
 	// }
 
 	vkInstance = new VulkanExample();
-	
 	vkInstance->vkInit();                          // Vulkan instance
     vkInstance->pickPhysicalDevAndQueue();         // Pick GPU and queue family
     vkInstance->createLogicalDevAndQueue();        // Create logical device and queue
     vkInstance->createCommandAndQueryPool();       // Command pool and timestamp pool
 
 	//Create buffers and upload input matrices
-    vkInstance->generateMatrixBuffersAndCopyToDev(A, B, C, ldN, N);
+    vkInstance->generateMatrixBuffersAndCopyToDev(A, B, C, ldN, N, locks);
 
     //Create compute pipeline and descriptor sets
     vkInstance->createComputePipeline();

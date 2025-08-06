@@ -24,7 +24,10 @@ typedef struct {
     TileConfig buffer[1024];
     int head, tail, size;
     bool done;
-    pthread_mutex_t lock;
+
+    pthread_mutex_t lock; // for accessing the queue
+    pthread_mutex_t *C_locks; // for accessing tiles
+
     pthread_cond_t not_empty;
     pthread_cond_t capacity_available;
     Mult matrix;

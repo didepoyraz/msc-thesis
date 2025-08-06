@@ -10,7 +10,7 @@
 int cpu_counter = 0;
 int gpu_counter = 0;
 
-#define DEBUG_MODE 0
+#define DEBUG_MODE 1
 
 
 #if DEBUG_MODE 
@@ -19,9 +19,10 @@ int gpu_counter = 0;
     # define DEBUG_PRINT(...) do {} while (0)
 #endif
 
-#define offsetA(i, p, ldN) (i * ldN + p)
-#define offsetB(p, j, ldN) (p * ldN + j)
-#define offsetC(i, j, ldN) (i * ldN + j)
+#define offsetA(i, p, N) (i * N + p)
+#define offsetB(p, j, N) (p * N + j)
+#define offsetC(i, j, N) (i * N + j)
+#define tileIndex(i,j,block_size, N) ((i / block_size) * (N / block_size) + (j / block_size))
 #define NUM_THREADS 4
 
 void* cpu_worker(void* arg){
@@ -34,12 +35,17 @@ void* cpu_worker(void* arg){
         obj_t A_blis, B_blis, C_blis;
         
         DEBUG_PRINT("\n***** CPU is submitting tile: A(%i, %i), B(%i, %i), C(%i, %i) *****\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-        
+
+        int idx = tileIndex(tile.i, tile.j, q->matrix.BLOCK_SIZE,q->matrix.N);
+
+        pthread_mutex_lock(&q->C_locks[idx]);
         bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.A + offsetA(tile.i, tile.p, q->matrix.N), q->matrix.N, 1, &A_blis);
         bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.B + offsetB(tile.p, tile.j, q->matrix.N), q->matrix.N, 1, &B_blis);
         bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.C + offsetC(tile.i, tile.j, q->matrix.N), q->matrix.N, 1, &C_blis);
         
         bli_gemm(&BLIS_ONE, &A_blis, &B_blis, &BLIS_ONE, &C_blis);
+        pthread_mutex_unlock(&q->C_locks[idx]);
+         
         cpu_counter++;
     }
     return NULL;
@@ -57,6 +63,7 @@ void* gpu_worker(void* arg){
     }
     return NULL;
 }
+
 
 int main(int argc, char* argv[]) {
 
@@ -80,7 +87,16 @@ int main(int argc, char* argv[]) {
 
     struct timespec tic, toc;
     double elapsed;
-    
+
+    // initialise the tile locks
+    pthread_mutex_t *C_locks;
+    int num_tiles = (N / BLOCK_SIZE) * (N / BLOCK_SIZE);
+    C_locks = malloc(num_tiles * sizeof(pthread_mutex_t));
+
+    for (int t = 0; t < num_tiles; t++) {
+        pthread_mutex_init(&C_locks[t], NULL);
+    }
+
     // initialise the gpu float vectors
     float* A = malloc(N * N * sizeof(float));
     float* B = malloc(N * N * sizeof(float));
@@ -93,13 +109,13 @@ int main(int argc, char* argv[]) {
     }
 
     Mult matrix = {.A = A, .B = B, .C = C, .N = N, .BLOCK_SIZE = BLOCK_SIZE};
-    TileQueue queue = { .head = 0, .tail = 0, .size = 0, .done = false, .matrix = matrix};
+    TileQueue queue = { .head = 0, .tail = 0, .size = 0, .done = false, .matrix = matrix, .C_locks= C_locks};
     
     pthread_mutex_init(&queue.lock, NULL);
     pthread_cond_init(&queue.not_empty, NULL);
 
     clock_gettime(CLOCK_MONOTONIC, &tic);
-    vulkan_init(A, B, C, N, BLOCK_SIZE);
+    vulkan_init(A, B, C, N, BLOCK_SIZE, C_locks);
     clock_gettime(CLOCK_MONOTONIC, &toc);
 
     bli_init(); 

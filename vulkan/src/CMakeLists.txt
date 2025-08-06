@@ -92,6 +92,7 @@ function(buildExample EXAMPLE_NAME)
 				m
 
 			)
+		target_compile_options(cpu_gpu_comb PRIVATE -g -O0)
     endif()
 
 endfunction(buildExample)

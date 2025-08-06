@@ -525,27 +525,19 @@ public:
         // }
         // LOG("\n\n");
 
-		int tile_row = pc.offsetRowC / TILE;
-		int tile_col = pc.offsetColC / TILE;
-		int tile_index = tile_row * (N / TILE) + tile_col; // (N/TILE) is to find the number of tiles within our matrix 
+		int tile_row = pc.offsetRowC / N;
+		int tile_col = pc.offsetColC / N;
+		int tile_index = tile_row * (ldN / N) + tile_col; // (N/TILE) is to find the number of tiles within our matrix 
 
-				
 		pthread_mutex_lock(&C_locks[tile_index]);
-		for (int r = 0; r < TILE; ++r) {
-			for (int c = 0; c < TILE; ++c) {
-				int idxC = (pc.offsetRowC + r) * ldN + (pc.offsetColC + c);
-				int idxF = r * TILE + c; // fdata is TILE × TILE
-				outC[idxC] += fdata[idxF];
-			}
+		for (int r = 0; r < N; ++r) {
+				for (int c = 0; c < N; ++c) {
+					int idx = (pc.offsetRowC + r) * ldN + (pc.offsetColC + c);
+					outC[idx] += fdata[idx];
+				}
 		}
 		pthread_mutex_unlock(&C_locks[tile_index]);
 
-		// for (int r = 0; r < N; ++r) {
-		// 	for (int c = 0; c < N; ++c) {
-		// 		int idx = (pc.offsetRowC + r) * ldN + (pc.offsetColC + c);
-		// 		outC[idx] += fdata[idx];
-		// 	}
-		// }
 
 		//TODO: you need to flush it to the GPU otherwise this is not going to be
         // set to 0 when you only do memset.

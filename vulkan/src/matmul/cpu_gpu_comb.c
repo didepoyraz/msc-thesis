@@ -6,6 +6,7 @@
 #include "utils.h"
 #include "tile_queue.h"
 #include <pthread.h>
+#include <assert.h>
 
 int cpu_counter = 0;
 int gpu_counter = 0;
@@ -35,21 +36,22 @@ void* cpu_worker(void* arg){
         obj_t A_blis, B_blis, C_blis;
         int idx = tileIndex(tile.i, tile.j, q->matrix.BLOCK_SIZE,q->matrix.N);
 
-
-        
         DEBUG_PRINT("\n***** CPU is submitting tile: A(%i, %i), B(%i, %i), C(%i, %i), index: %i *****\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j, idx);
+        // pthread_mutexattr_t attr;
+        // pthread_mutexattr_init(&attr);
+        // pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
 
         // pthread_mutex_lock(&q->C_locks[idx]);
-        int rc = pthread_mutex_trylock(&q->C_locks[idx]);
-        if (rc == EBUSY) {
-            DEBUG_PRINT("Tile %d already locked, thread %lu waiting...\n", idx, pthread_self());
-            pthread_mutex_lock(&q->C_locks[idx]);
-        }
+        assert(idx >= 0 && idx < ((q->matrix.N / q->matrix.BLOCK_SIZE) * (q->matrix.N / q->matrix.BLOCK_SIZE)));
+        pthread_mutex_lock(&q->C_locks[idx]);
+
         bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.A + offsetA(tile.i, tile.p, q->matrix.N), q->matrix.N, 1, &A_blis);
         bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.B + offsetB(tile.p, tile.j, q->matrix.N), q->matrix.N, 1, &B_blis);
         bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.C + offsetC(tile.i, tile.j, q->matrix.N), q->matrix.N, 1, &C_blis);
         
         bli_gemm(&BLIS_ONE, &A_blis, &B_blis, &BLIS_ONE, &C_blis);
+
+        DEBUG_PRINT("Unlocking tile %d in thread %lu\n", idx, pthread_self());
         pthread_mutex_unlock(&q->C_locks[idx]);
          
         cpu_counter++;
@@ -99,8 +101,13 @@ int main(int argc, char* argv[]) {
     int num_tiles = (N / BLOCK_SIZE) * (N / BLOCK_SIZE);
     C_locks = malloc(num_tiles * sizeof(pthread_mutex_t));
 
+    DEBUG_PRINT("num tiles: %i\n", num_tiles);
+
     for (int t = 0; t < num_tiles; t++) {
-        pthread_mutex_init(&C_locks[t], NULL);
+        if (pthread_mutex_init(&C_locks[t], NULL) != 0) {
+            perror("pthread_mutex_init");
+            exit(1);
+        }
     }
 
     // initialise the gpu float vectors
@@ -201,6 +208,10 @@ int main(int argc, char* argv[]) {
 
 
     // free everything
+    for (int t = 0; t < num_tiles; t++) {
+        pthread_mutex_destroy(&C_locks[t]);
+    }
+    free(C_locks);
     free(A); free(B); free(C);
 
     vulkan_cleanup();

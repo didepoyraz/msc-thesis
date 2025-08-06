@@ -158,37 +158,37 @@ int main(int argc, char* argv[]) {
 
     clock_gettime(CLOCK_MONOTONIC, &end);
 
-    // elapsed_full_execution = (end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);
-    // elapsed = (toc.tv_sec - tic.tv_sec) * 1000000000LL + (toc.tv_nsec - tic.tv_nsec);
+    elapsed_full_execution = (end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);
+    elapsed = (toc.tv_sec - tic.tv_sec) * 1000000000LL + (toc.tv_nsec - tic.tv_nsec);
 
-    // printf("Vulkan Setup Time: %f ns \n", elapsed);
-    // printf("Compute Time: %f ns \n", elapsed_full_execution);
-    // printf("Total Execution Time: %f ns \n", (elapsed_full_execution + elapsed));
+    printf("Vulkan Setup Time: %f ns \n", elapsed);
+    printf("Compute Time: %f ns \n", elapsed_full_execution);
+    printf("Total Execution Time: %f ns \n", (elapsed_full_execution + elapsed));
 
-    // printf("GPU has completed %i tiles and the CPU has completed %i tiles.\n", gpu_counter, cpu_counter);
+    printf("GPU has completed %i tiles and the CPU has completed %i tiles.\n", gpu_counter, cpu_counter);
 
 
     // printf("Resulting Matrix: \n");
     // print_first_row_matrix_float(C, N);
-    // printf("matrix c first element %f, last element %f", C[0], C[(N*N)-1]);
-    // vulkan_print_total_time();
+    printf("matrix c first element %f, last element %f", C[0], C[(N*N)-1]);
+    vulkan_print_total_time();
 
-    // char filename[128];
-    // char* s = "/home/pi/Desktop/msc-thesis/vulkan/results/output_matrix";
-    // snprintf(filename, sizeof(filename), "%s_%d_%d.csv ", s, N, BLOCK_SIZE);
+    char filename[128];
+    char* s = "/home/pi/Desktop/msc-thesis/vulkan/results/output_matrix";
+    snprintf(filename, sizeof(filename), "%s_%d_%d.csv ", s, N, BLOCK_SIZE);
     
-    // printf("filename: %s", filename );
-    // save_matrix_to_file(filename, C, N);
+    printf("filename: %s", filename );
+    save_matrix_to_file(filename, C, N);
 
-    // char file_execution[128];
-    // char* s_execution = "/home/pi/Desktop/msc-thesis/vulkan/results/execution_time";
+    char file_execution[128];
+    char* s_execution = "/home/pi/Desktop/msc-thesis/vulkan/results/execution_time";
 
-    // save_value_to_file(s_execution, (elapsed_full_execution+elapsed));
+    save_value_to_file(s_execution, (elapsed_full_execution+elapsed));
     
-    // char file_compute[128];
-    // char* s_compute = "/home/pi/Desktop/msc-thesis/vulkan/results/compute_time";
+    char file_compute[128];
+    char* s_compute = "/home/pi/Desktop/msc-thesis/vulkan/results/compute_time";
 
-    // save_value_to_file(s_compute, elapsed_full_execution);
+    save_value_to_file(s_compute, elapsed_full_execution);
 
     // free everything
     for (int t = 0; t < num_tiles; t++) {

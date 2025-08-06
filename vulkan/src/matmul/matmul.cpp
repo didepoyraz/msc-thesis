@@ -227,17 +227,29 @@ public:
 		this->ldN = ldN;
 		this->N = N;
 		this->C_locks = locks;
-
+		
+		bufferSize = ldN * ldN * sizeof(float);
+		size_t count = ldN * ldN;
+		size_t bytes = count * sizeof(float);
 		// matrix A
-		std::vector<float> Input_MatrixA(inA, inA + ldN * ldN);
+		// std::vector<float> Input_MatrixA(inA, inA + ldN * ldN);
 		// matrix B
-		std::vector<float> Input_MatrixB(inB, inB + ldN * ldN);
+		// std::vector<float> Input_MatrixB(inB, inB + ldN * ldN);
+
+		float* Input_MatrixA = static_cast<float*>(std::aligned_alloc(16, bytes));
+		float* Input_MatrixB = static_cast<float*>(std::aligned_alloc(16, bytes));
+
+		assert(reinterpret_cast<uintptr_t>(Input_MatrixA) % 16 == 0);
+		assert(reinterpret_cast<uintptr_t>(Input_MatrixB) % 16 == 0);
+
+
 		// float* A_data = static_cast<float*>(std::aligned_alloc(16, ldN *  ldN * sizeof(float)));
 		// float* B_data = static_cast<float*>(std::aligned_alloc(16, ldN *  ldN* sizeof(float)));
 		// float* C_data = static_cast<float*>(std::aligned_alloc(16, matrix_size * matrix_size * sizeof(float)));
 
-		bufferSize = ldN * ldN * sizeof(float);
-
+		
+		std::memcpy(Input_MatrixA, inA, bytes);
+		std::memcpy(Input_MatrixB, inB, bytes);
 		// Copy input data to GPU mem using staging buffer 
 		
 			// for matrix A
@@ -247,7 +259,7 @@ public:
 			&hostBufferA,
 			&hostMemoryA,
 			bufferSize,
-			Input_MatrixA.data());
+			Input_MatrixA);
 
 		// for matrix B
 		createBuffer(
@@ -256,7 +268,7 @@ public:
 			&hostBufferB,
 			&hostMemoryB,
 			bufferSize,
-			Input_MatrixB.data());
+			Input_MatrixB);
 		
 		// for matrix C, no data initialized, or can be initialized with 0...
 		createBuffer(

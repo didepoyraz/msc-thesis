@@ -225,18 +225,30 @@ public:
 			Prepare storage buffers
 		*/
 		// matrix A
-		std::vector<float> Input_MatrixA(N * N);
+		// std::vector<float> Input_MatrixA(N * N);
 		// matrix B
-		std::vector<float> Input_MatrixB(N * N);
+		// std::vector<float> Input_MatrixB(N * N);
 		// output matrix
 		std::vector<float> Output_Matrix(N * N);
 
-			
+		size_t count = N * N;
+
+		size_t bytes = count * sizeof(float);
+		float* Input_MatrixA = static_cast<float*>(std::aligned_alloc(16, bytes));
+		float* Input_MatrixB = static_cast<float*>(std::aligned_alloc(16, bytes));
+
+		assert(reinterpret_cast<uintptr_t>(Input_MatrixA) % 16 == 0);
+		assert(reinterpret_cast<uintptr_t>(Input_MatrixB) % 16 == 0);
+
 
 		// fill input data
 		uint32_t n = 0;
-		std::generate(Input_MatrixA.begin(), Input_MatrixA.end(), [&n] { return n++; });
-        std::generate(Input_MatrixB.begin(), Input_MatrixB.end(), [&n] { return n++; });
+		std::generate(Input_MatrixA, Input_MatrixA + count, [&n] { return n++; });
+        std::generate(Input_MatrixB, Input_MatrixB + count, [&n] { return n++; });
+
+		// uint32_t n = 0;
+		// std::generate(Input_MatrixA.begin(), Input_MatrixA.end(), [&n] { return n++; });
+        // std::generate(Input_MatrixB.begin(), Input_MatrixB.end(), [&n] { return n++; });
 
 		const VkDeviceSize bufferSize = N * N * sizeof(float);
 
@@ -252,7 +264,7 @@ public:
 				&hostBufferA,
 				&hostMemoryA,
 				bufferSize,
-				Input_MatrixA.data());
+				Input_MatrixA);
 
             // for matrix B
             createBuffer(
@@ -261,7 +273,7 @@ public:
 				&hostBufferB,
 				&hostMemoryB,
 				bufferSize,
-				Input_MatrixB.data());
+				Input_MatrixB);
 			
 			// for matrix C, no data initialized, or can be initialized with 0...
             createBuffer(

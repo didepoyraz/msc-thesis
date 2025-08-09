@@ -55,20 +55,21 @@ public:
 		vkGetQueryPoolResults(device, queryPool, 2, 1, sizeof(timestampExeEnd), &timestampExeEnd, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
 		vkGetQueryPoolResults(device, queryPool, 3, 1, sizeof(timestampEnd), &timestampEnd, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
 
-		std::cout << "Timestamp Pipeline Start: " << timestamp1 << std::endl;
-		std::cout << "Timestamp Exe Start: " << timestampStart << std::endl;
-		std::cout << "Timestamp Exe End: " << timestampExeEnd << std::endl;
-		std::cout << "Timestamp All End: " << timestampEnd << std::endl;
+		// std::cout << "Timestamp Pipeline Start: " << timestamp1 << std::endl;
+		// std::cout << "Timestamp Exe Start: " << timestampStart << std::endl;
+		// std::cout << "Timestamp Exe End: " << timestampExeEnd << std::endl;
+		// std::cout << "Timestamp All End: " << timestampEnd << std::endl;
 
 		uint64_t elapsedTime1 = timestampStart - timestamp1;
 		uint64_t elapsedTime2 = timestampExeEnd - timestampStart;
 		uint64_t elapsedTime3 = timestampEnd - timestampExeEnd;
 		uint64_t totalExecutionTime = timestampEnd - timestamp1;
 		
-		std::cout << "Bufffer setup time = " << elapsedTime1 << " ns" << std::endl;
-		std::cout << "Computation time = " << elapsedTime2 << " ns" << std::endl;
-		std::cout << "Buffer write + GPU->host transfer time = " << elapsedTime3 << " ns" << std::endl;
-		std::cout << "Total Execution time = " << totalExecutionTime << " ns" << std::endl;
+		// std::cout << "Bufffer setup time = " << elapsedTime1 << " ns" << std::endl;
+		// std::cout << "Computation time = " << elapsedTime2 << " ns" << std::endl;
+		// std::cout << "Buffer write + GPU->host transfer time = " << elapsedTime3 << " ns" << std::endl;
+		// std::cout << "Total Execution time = " << totalExecutionTime << " ns" << std::endl;
+		std::cout << elapsedTime2 << std::endl;
 	}
 
 	VkResult createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkBuffer *buffer, VkDeviceMemory *memory, VkDeviceSize size, void *data = nullptr)
@@ -86,7 +87,7 @@ public:
 		VkMemoryAllocateInfo memAlloc = vks::initializers::memoryAllocateInfo();
 		vkGetBufferMemoryRequirements(device, *buffer, &memReqs); // querying vulkan to find out how much memory we need for this buffer
 		
-		std::cout << "Buffer Size: " << memReqs.size / (1024 * 1024) << " MB" << std::endl;
+		// std::cout << "Buffer Size: " << memReqs.size / (1024 * 1024) << " MB" << std::endl;
 
 		memAlloc.allocationSize = memReqs.size;
 		// Find a memory type index that fits the properties of the buffer
@@ -118,7 +119,7 @@ public:
 
 	VulkanExample()
 	{
-		LOG("Running matrix multiplication!\n");
+		// LOG("Running matrix multiplication!\n");
 		VkApplicationInfo appInfo = {};
 		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 		appInfo.pApplicationName = "Vulkan matrix multiplication";
@@ -153,17 +154,17 @@ public:
 
 		VkPhysicalDeviceFeatures features;
 		vkGetPhysicalDeviceFeatures(physicalDevice, &features);
-		std::cout << "shaderInt64: " << features.shaderInt64 << std::endl;
+		// std::cout << "shaderInt64: " << features.shaderInt64 << std::endl;
 
 		VkPhysicalDeviceProperties deviceProperties;
 		vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
-		LOG("GPU: %s\n", deviceProperties.deviceName);
-		LOG("Max shared memory per workgroup: {%d} bytes\n", deviceProperties.limits.maxComputeSharedMemorySize);
-		LOG("Max threads per workgroup: {%d}\n", deviceProperties.limits.maxComputeWorkGroupInvocations);
-		LOG("Max workgroup size: {%d} x {%d} x {%d}\n",
-         deviceProperties.limits.maxComputeWorkGroupSize[0],
-         deviceProperties.limits.maxComputeWorkGroupSize[1],
-         deviceProperties.limits.maxComputeWorkGroupSize[2]);
+		// LOG("GPU: %s\n", deviceProperties.deviceName);
+		// LOG("Max shared memory per workgroup: {%d} bytes\n", deviceProperties.limits.maxComputeSharedMemorySize);
+		// LOG("Max threads per workgroup: {%d}\n", deviceProperties.limits.maxComputeWorkGroupInvocations);
+		// LOG("Max workgroup size: {%d} x {%d} x {%d}\n",
+        //  deviceProperties.limits.maxComputeWorkGroupSize[0],
+        //  deviceProperties.limits.maxComputeWorkGroupSize[1],
+        //  deviceProperties.limits.maxComputeWorkGroupSize[2];
 
 		// Request a single compute queue
 		const float defaultQueuePriority(0.0f);
@@ -583,7 +584,7 @@ public:
 		// 	LOG("%f \t", Input_MatrixB[i]);
 		// }
 
-		LOG("%f \t", Output_Matrix[0]);
+		// LOG("%f \t", Output_Matrix[0]);
 		// LOG("First row of output matrix:\n");
 		// for (int i = 0; i < cols; ++i) {
 		// 	LOG("%f \t", Output_Matrix[i]);
@@ -631,7 +632,7 @@ int main(int argc, char* argv[]) {
 		TILE = std::atoi(argv[2]);
     }
 
-	std::cout << "Using N = " << N << std::endl;
+	// std::cout << "Using N = " << N << std::endl;
 
 	// commandLineParser.add("shaders", { "-s", "--shaders" }, 1, "Select shader type to use (glsl or hlsl)");
 	// commandLineParser.parse(argc, argv);
@@ -639,11 +640,11 @@ int main(int argc, char* argv[]) {
 	int threadsPerGroup = TILE*TILE; //current thread group's local size is x=y=1
 	int totalThreads = (N * N);
 	int totalThreadGroups = totalThreads / threadsPerGroup;
-	std::cout << "Threads per group is " << threadsPerGroup << "; Total thread groups " << totalThreadGroups << "; Total threads is " << totalThreads << std::endl;
+	// std::cout << "Threads per group is " << threadsPerGroup << "; Total thread groups " << totalThreadGroups << "; Total threads is " << totalThreads << std::endl;
 
 	VulkanExample *vulkanExample = new VulkanExample();
-	std::cout << "Finished. Press enter to terminate...";
-	std::cin.get();
+	// std::cout << "Finished. Press enter to terminate...";
+	// std::cin.get();
 	delete(vulkanExample);
 	return 0;
 }

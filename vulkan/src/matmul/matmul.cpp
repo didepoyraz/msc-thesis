@@ -600,7 +600,7 @@ extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t
 		delete vkInstance;
 	}
 
-	LOG("Initialising Vulkan\n");
+	// LOG("Initialising Vulkan\n");
 	// LOG("First row of matrix A:\n");
 	// for (int i = 0; i < 4; ++i) {
 	// 	LOG("%f \t", B[i]);
@@ -617,7 +617,7 @@ extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t
 
     //Create compute pipeline and descriptor sets
     vkInstance->createComputePipeline();
-	LOG("Finished Initialisation\n");
+	// LOG("Finished Initialisation\n");
 }
 
 extern "C" void vulkan_submit_tile(uint32_t offsetRowA, uint32_t offsetColA, uint32_t offsetRowB, uint32_t offsetColB, uint32_t offsetRowC, uint32_t offsetColC){

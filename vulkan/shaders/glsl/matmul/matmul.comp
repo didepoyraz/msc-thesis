@@ -1,14 +1,14 @@
 #version 450
 
-layout(set = 0, binding = 0) buffer MatrixA {
-   float dataA[];
+layout(std430, set = 0, binding = 0) buffer MatrixA {
+   vec4 dataA[];
 };
 
-layout(binding = 1) buffer MatrixB {
-   float dataB[];
+layout(std430,binding = 1) buffer MatrixB {
+   vec4 dataB[];
 };
 
-layout(binding = 2) buffer MatrixC {
+layout(std430,binding = 2) buffer MatrixC {
    float output_dataC[];
 };
 

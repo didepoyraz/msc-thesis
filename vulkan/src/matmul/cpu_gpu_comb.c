@@ -20,202 +20,83 @@ int gpu_counter = 0;
     # define DEBUG_PRINT(...) do {} while (0)
 #endif
 
-#define offsetA(i, p, N) (i * N + p)
-#define offsetB(p, j, N) (p * N + j)
-#define offsetC(i, j, N) (i * N + j)
-#define tileIndex(i,j,block_size, N) ((i / block_size) * (N / block_size) + (j / block_size))
-#define NUM_THREADS 4
-
-void* cpu_worker(void* arg){
-    TileQueue* q = (TileQueue*) arg;
-    TileConfig tile;
-    DEBUG_PRINT("\nCPU threads starting up!");
-
-    // TODO: add a lock to each output element of C
-    while(dequeue_tile(q, &tile)) {
-        obj_t A_blis, B_blis, C_blis;
-        int idx = tileIndex(tile.i, tile.j, q->matrix.BLOCK_SIZE,q->matrix.N);
-
-        DEBUG_PRINT("\n***** CPU is submitting tile: A(%i, %i), B(%i, %i), C(%i, %i), index: %i *****\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j, idx);
-        // pthread_mutexattr_t attr;
-        // pthread_mutexattr_init(&attr);
-        // pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
-
-        // pthread_mutex_lock(&q->C_locks[idx]);
-        assert(idx >= 0 && idx < ((q->matrix.N / q->matrix.BLOCK_SIZE) * (q->matrix.N / q->matrix.BLOCK_SIZE)));
-        pthread_mutex_lock(&q->C_locks[idx]);
-
-        bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.A + offsetA(tile.i, tile.p, q->matrix.N), q->matrix.N, 1, &A_blis);
-        bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.B + offsetB(tile.p, tile.j, q->matrix.N), q->matrix.N, 1, &B_blis);
-        bli_obj_create_with_attached_buffer(BLIS_FLOAT, q->matrix.BLOCK_SIZE, q->matrix.BLOCK_SIZE, q->matrix.C + offsetC(tile.i, tile.j, q->matrix.N), q->matrix.N, 1, &C_blis);
-        
-        bli_gemm(&BLIS_ONE, &A_blis, &B_blis, &BLIS_ONE, &C_blis);
-
-        DEBUG_PRINT("Unlocking tile %d in thread %lu\n", idx, pthread_self());
-        pthread_mutex_unlock(&q->C_locks[idx]);
-         
-        cpu_counter++;
-    }
-    return NULL;
-}
-
-void* gpu_worker(void* arg){
-    TileQueue* q = (TileQueue*) arg;
-    TileConfig tile;
-    DEBUG_PRINT("\nGPU thread starting up!");
-    // TODO: add a lock to each output element of C
-    while(dequeue_tile(q, &tile)) {
-        DEBUG_PRINT("\n++++ GPU is submitting tile: A(%i, %i), B(%i, %i), C(%i, %i) ++++\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-        vulkan_submit_tile(tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-        gpu_counter++;
-    }
-    return NULL;
-}
-
-
 int main(int argc, char* argv[]) {
 
-    int M = 1024;
-    int N = 1024;
-    int K = 1024;
-    int BLOCK_SIZE = 512;
-    int GPU_TILE_SIZE = 16;
-   
+    int M = 8192;
+    int N = 8192;
+    int K = 8192;
+    int mode = 0;
+
+    int num_iter;
+    int num_warmups = 5;
+    double total_compute_time = 0;
+
     if (argc > 2) {
         M = atoi(argv[1]);
         N = atoi(argv[1]);
         K = atoi(argv[1]);
-        
-        BLOCK_SIZE = atoi(argv[2]);
+
+        num_iter = atoi(argv[2]);
     }
-    // int ldN = N;
-    bli_thread_set_num_threads(1);
-    double elapsed_compute = 0;
-    struct timespec start, end;
-
-    struct timespec tic, toc;
-    double elapsed;
-
-    // initialise the tile locks
-    pthread_mutex_t *C_locks;
-    int num_tiles = (N / BLOCK_SIZE) * (N / BLOCK_SIZE);
-    C_locks = malloc(num_tiles * sizeof(pthread_mutex_t));
 
     DEBUG_PRINT("num tiles: %i\n", num_tiles);
 
-    for (int t = 0; t < num_tiles; t++) {
-        if (pthread_mutex_init(&C_locks[t], NULL) != 0) {
-            perror("pthread_mutex_init");
-            exit(1);
-        }
-    }
-
     // initialise the gpu float vectors
     float* A = malloc(N * N * sizeof(float));
-    float* B = malloc(N * N * sizeof(float));
     float* C = malloc(N * N * sizeof(float));
 
     // fill the vectors 
     for (int i = 0; i < N * N; i++) {
         A[i] = (float)i;
-        B[i] = (float)i + N*N;
     }
 
-    Mult matrix = {.A = A, .B = B, .C = C, .N = N, .BLOCK_SIZE = BLOCK_SIZE};
-    TileQueue queue = { .head = 0, .tail = 0, .size = 0, .done = false, .matrix = matrix, .C_locks= C_locks};
+    vulkan_init(A, C, N);
+
+    // warm up runs
+    for(int i = 0; i <num_warmups; i ++){
+        vulkan_submit_tile(M, N,mode);
+    }
+
+    for(int i = 0; i <num_iter; i ++){
+        total_compute_time += vulkan_submit_tile(M, N,mode);
+    }
+
+    vulkan_print_total_time();
+    printf("total compute time of runs: %f\n", total_compute_time);
+    // printf("%f", elapsed_compute);
     
-    pthread_mutex_init(&queue.lock, NULL);
-    pthread_cond_init(&queue.not_empty, NULL);
+    // //----------------Calculate Bandwidth
+    // double average_compute_time_s = (total_compute_time / num_iter) / 1000000000;
+    // float bytes_read = M * N * 4;
+    // float mean_bandwidth_gbs = (bytes_read / average_compute_time_s) / 1000000000;
+    // double gibs = mean_bandwidth_gbs / (1024.0*1024.0*1024.0);
 
-    clock_gettime(CLOCK_MONOTONIC, &tic);
-    vulkan_init(A, B, C, N, BLOCK_SIZE, C_locks);
-    clock_gettime(CLOCK_MONOTONIC, &toc);
+    // printf("Mean Bandwidth: %f, and %f\n", mean_bandwidth_gbs, gibs);
+    const double ns_per_tick = 1.0; // Pi reports 1 ns/tick
 
-    bli_init(); 
+    // totals you already accumulated in TICKS:
+    uint64_t total_compute_ticks = total_compute_time ;   // across K runs
+    int L = num_iter;
 
-    DEBUG_PRINT("initialising threads!\n");
+    // 1) mean time per run (seconds)
+ 
+    double avg_compute_time   = (total_compute_time / num_iter) / 1000000000;
 
-    
+    // 2) bytes read once (use 64-bit or double!)
+    double bytes = (double) M * (double) N * 4.0 * 64;
+    double gb = bytes / 1e9;
 
-    pthread_t threads[NUM_THREADS];
+    // 3) bandwidths
+    double bandwidth_gbs  = gb / avg_compute_time;               // bytes/second
+    double bandwidth_Bps  = bytes / avg_compute_time;               // bytes/second
+ 
+    double bandwidth_GBs  = bandwidth_Bps / 1e9;                      // decimal GB/s
+    double bandwidth_GiBs = bandwidth_Bps / (1024.0*1024.0*1024.0);   // binary GiB/s
 
-    // CPU threads
-    for(int i = 0; i < (NUM_THREADS - 1); i++) {
-        pthread_create(&threads[i], NULL, cpu_worker, &queue);
-    }
-    // GPU thread
-    pthread_create(&threads[NUM_THREADS-1], NULL, gpu_worker, &queue);
+    printf("Mean Bandwidth: %.2f GiB/s (%.2f GB/s), gbs: %.2f\n", bandwidth_GiBs, bandwidth_GBs, bandwidth_gbs);
 
-    int cpu_gpu_ratio = 6;  
-    int count = 0;  
-
-    DEBUG_PRINT("\nstarting to submit tiles to the tile queue!\n");
-    clock_gettime(CLOCK_MONOTONIC, &start);
-    for (int i = 0; i < N; i += BLOCK_SIZE) {
-        for (int j = 0; j < N; j += BLOCK_SIZE) {
-            for (int k = 0; k < N; k += BLOCK_SIZE) {
-                TileConfig tile = {i, j, k};
-                // DEBUG_PRINT("\n\n-----submitting tile: (%d, %d, %d)-------\n", tile.i, tile.j, tile.p);
-                DEBUG_PRINT("\n======= submitting tile: A(%i, %i), B(%i, %i), C(%i, %i) =======\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-                    enqueue_tile(&queue, tile);
-            }
-        }
-    }
-
-    pthread_mutex_lock(&queue.lock);
-    queue.done = true;
-    pthread_cond_broadcast(&queue.not_empty);
-    pthread_mutex_unlock(&queue.lock);
-    // DEBUG_PRINT("BLIS default threads: %d\n", bli_thread_get_num_threads());
-
-    for (int i = 0; i < NUM_THREADS; i++){
-        pthread_join(threads[i], NULL);
-    }
-
-    clock_gettime(CLOCK_MONOTONIC, &end);
-
-    elapsed_compute = (end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);
-    elapsed = (toc.tv_sec - tic.tv_sec) * 1000000000LL + (toc.tv_nsec - tic.tv_nsec);
-
-    // printf("Vulkan Setup Time: %f ns \n", elapsed);
-    // printf("Compute Time: %f ns \n", elapsed_compute);
-    // printf("Total Execution Time: %f ns \n", (elapsed_compute + elapsed));
-
-    // printf("GPU has completed %i tiles and the CPU has completed %i tiles.\n", gpu_counter, cpu_counter);
-
-
-    // printf("Resulting Matrix: \n");
-    // print_first_row_matrix_float(C, N);
-    // printf("matrix c first element %f, last element %f", C[0], C[(N*N)-1]);
-    // vulkan_print_total_time();
-
-    // char filename[128];
-    // char* s = "/home/pi/Desktop/msc-thesis/vulkan/results/output_matrix";
-    // snprintf(filename, sizeof(filename), "%s_%d_%d.csv ", s, N, BLOCK_SIZE);
-    
-    // printf("filename: %s", filename );
-    // save_matrix_to_file(filename, C, N);
-
-    // char file_execution[128];
-    // char* s_execution = "/home/pi/Desktop/msc-thesis/vulkan/results/execution_time";
-
-    // save_value_to_file(s_execution, (elapsed_full_execution+elapsed));
-    
-    // char file_compute[128];
-    // char* s_compute = "/home/pi/Desktop/msc-thesis/vulkan/results/compute_time";
-
-    // save_value_to_file(s_compute, elapsed_full_execution);
-
-    printf("%f", elapsed_compute);
-    // free everything
-    for (int t = 0; t < num_tiles; t++) {
-        pthread_mutex_destroy(&C_locks[t]);
-    }
-    free(C_locks);
-    free(A); free(B); free(C);
-
+    free(A); free(C);
     vulkan_cleanup();
-    bli_finalize();
 
     return 0;
 }

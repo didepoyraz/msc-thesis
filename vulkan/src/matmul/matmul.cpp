@@ -20,12 +20,9 @@
 CommandLineParser commandLineParser;
 
 struct PushConstants {
-    uint32_t offsetRowA;
-	uint32_t offsetColA;
-	uint32_t offsetRowB;
-	uint32_t offsetColB;
-	uint32_t offsetRowC;
-	uint32_t offsetColC;
+    uint32_t M;       // rows
+    uint32_t N;       // cols
+    uint mode;// 0: one slot, 1: per-WG
 };
 
 class VulkanExample
@@ -43,7 +40,7 @@ public:
 	VkDeviceSize bufferSize;
 	uint32_t N;
 	uint32_t ldN;
-	uint32_t TILE;
+	uint32_t TILE = 16;
 	pthread_mutex_t* C_locks = nullptr;
 
 	float* mappedHostC = nullptr;
@@ -76,6 +73,7 @@ public:
 	uint64_t totalComputeTime = 0;
 	uint64_t totalTransferTime = 0;
 	uint64_t totalTime = 0;
+	uint64_t computeTime = 0;
 
 
 
@@ -83,27 +81,21 @@ public:
 		get timestamps from the query pool
 	*/
 	void queryTimestamps() {
-		uint64_t timestamp1, timestampStart, timestampExeEnd, timestampEnd;
-		vkGetQueryPoolResults(device, queryPool, 0, 1, sizeof(timestamp1), &timestamp1, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+		uint64_t timestampStart, timestampExeEnd;
+	
 		vkGetQueryPoolResults(device, queryPool, 1, 1, sizeof(timestampStart), &timestampStart, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
 		vkGetQueryPoolResults(device, queryPool, 2, 1, sizeof(timestampExeEnd), &timestampExeEnd, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
-		vkGetQueryPoolResults(device, queryPool, 3, 1, sizeof(timestampEnd), &timestampEnd, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+
 
 		// std::cout << "Timestamp Pipeline Start: " << timestamp1 << std::endl;
 		// std::cout << "Timestamp Exe Start: " << timestampStart << std::endl;
 		// std::cout << "Timestamp Exe End: " << timestampExeEnd << std::endl;
 		// std::cout << "Timestamp All End: " << timestampEnd << std::endl;
 
-		uint64_t setupTime = timestampStart - timestamp1;
-		uint64_t computeTime = timestampExeEnd - timestampStart;
-		uint64_t transferTime = timestampEnd - timestampExeEnd;
-		uint64_t total = timestampEnd - timestamp1;
-
-		totalSetupTime += setupTime;
+	
+		computeTime = timestampExeEnd - timestampStart;
 		totalComputeTime += computeTime;
-		totalTransferTime += transferTime;
-		totalTime += total;
-			
+		
 		// std::cout << "Bufffer setup time = " << setupTime << " ns" << std::endl;
 		// std::cout << "Computation time = " << computeTime << " ns" << std::endl;
 		// std::cout << "Buffer write + GPU->host transfer time = " << transferTime << " ns" << std::endl;
@@ -185,11 +177,18 @@ public:
 		VK_CHECK_RESULT(vkEnumeratePhysicalDevices(instance, &deviceCount, physicalDevices.data()));
 		physicalDevice = physicalDevices[0];
 		
-		 uint32_t queueFamilyCount;
+		uint32_t queueFamilyCount;
 		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 		std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyCount);
 		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilyProperties.data());
 
+		VkPhysicalDeviceProperties props{};
+		vkGetPhysicalDeviceProperties(physicalDevice, &props);
+		
+		double ns_per_tick = props.limits.timestampPeriod; 
+		// If timestamp period is not 1, meaning it's not 1 nanosecond you need to multiply the time you get
+		// std::cout << "timestamp period: " << ns_per_tick << std::endl;
+		
 		for (uint32_t i = 0; i < queueFamilyProperties.size(); i++) {
 			if (queueFamilyProperties[i].queueFlags & VK_QUEUE_COMPUTE_BIT) {
 				queueFamilyIndex = i;
@@ -214,6 +213,7 @@ public:
 		
 		VK_CHECK_RESULT(vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device));
     	vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
+
 	}
 
 	void createCommandAndQueryPool() {
@@ -240,21 +240,20 @@ public:
 
 	}
 
-	void generateMatrixBuffersAndCopyToDev(float* inputA, float* inputB, float* outputC, uint32_t ldN, uint32_t N, pthread_mutex_t* locks) {
+	void generateMatrixBuffersAndCopyToDev(float* inputA, float* outputC, uint32_t ldN) {
 		inA = inputA;
-		inB = inputB;
 		outC = outputC;
-		this->ldN = ldN;
-		this->N = N;
-		this->C_locks = locks;
+		// this->ldN = ldN;
+		this->N = ldN;
+		uint32_t maxG = (ldN + 15) / 16;
+		uint32_t numWorkgroups = maxG * maxG;
+		
 
 		// matrix A
 		std::vector<float> Input_MatrixA(inA, inA + ldN * ldN);
-		// matrix B
-		std::vector<float> Input_MatrixB(inB, inB + ldN * ldN);
 
 		bufferSize = ldN * ldN * sizeof(float);
-
+		uint32_t sinkSize = bufferSize;	
 		// Copy input data to GPU mem using staging buffer 
 		
 			// for matrix A
@@ -266,22 +265,13 @@ public:
 			bufferSize,
 			Input_MatrixA.data());
 
-		// for matrix B
-		createBuffer(
-			VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-			&hostBufferB,
-			&hostMemoryB,
-			bufferSize,
-			Input_MatrixB.data());
-		
 		// for matrix C, no data initialized, or can be initialized with 0...
 		createBuffer(
 			VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
 			&hostBufferC,
 			&hostMemoryC,
-			bufferSize,
+			sinkSize,
 			NULL); 
 
 		// Flush writes to host visible buffer
@@ -295,31 +285,17 @@ public:
 		vkUnmapMemory(device, hostMemoryA);
 		mapped = NULL;
 
-		vkMapMemory(device, hostMemoryB, 0, VK_WHOLE_SIZE, 0, &mapped);
-		mappedRange = vks::initializers::mappedMemoryRange();
-		mappedRange.memory = hostMemoryB;
-		mappedRange.offset = 0;
-		mappedRange.size = VK_WHOLE_SIZE;
-		vkFlushMappedMemoryRanges(device, 1, &mappedRange);
-		vkUnmapMemory(device, hostMemoryB);
-
 		// device-local buffer for matrix A
 		createBuffer(
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, // First bit makes the buffer bindable as a storage buffer in the compute shader, so it can be read/written from the shader (layout(binding = ...) buffer { ... };). Second bit allows copying data into it from the host-visible staging buffer
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, // not accesible from the CPU
 			&deviceBufferA, &deviceMemoryA, bufferSize);
-
-		// Create device-local buffer for matrix B
-		createBuffer(
-			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			&deviceBufferB, &deviceMemoryB, bufferSize);
 		
 		// device-local buffer for matrix C
 		createBuffer(
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			&deviceBufferC, &deviceMemoryC, bufferSize);
+			&deviceBufferC, &deviceMemoryC, sinkSize);
 		
 						// Copy to staging buffer
 		VkCommandBufferAllocateInfo cmdBufAllocateInfo = vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
@@ -333,7 +309,6 @@ public:
 		copyRegionA.size = bufferSize;
 		copyRegionB.size = bufferSize;
 		vkCmdCopyBuffer(copyCmd, hostBufferA, deviceBufferA, 1, &copyRegionA);
-		vkCmdCopyBuffer(copyCmd, hostBufferB, deviceBufferB, 1, &copyRegionB);
 		
 		VK_CHECK_RESULT(vkEndCommandBuffer(copyCmd));
 
@@ -356,7 +331,7 @@ public:
 	void createComputePipeline() {
 		// 2 storage buffers for input + 1 for output
 		std::vector<VkDescriptorPoolSize> poolSizes = {
-			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3),
+			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2),
 		};
 
 		VkDescriptorPoolCreateInfo descriptorPoolInfo =
@@ -365,8 +340,7 @@ public:
 
 		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
 			vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0), // binding 0
-			vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 1), // binding 1
-			vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 2), // binding 2 for Matrix C
+			vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 1), // binding 1 for Matrix C
 		};
 		VkDescriptorSetLayoutCreateInfo descriptorLayout =
 			vks::initializers::descriptorSetLayoutCreateInfo(setLayoutBindings);
@@ -390,7 +364,6 @@ public:
 
 		//VkDescriptorBufferInfo bufferDescriptor = { deviceBuffer, 0, VK_WHOLE_SIZE };
 		VkDescriptorBufferInfo bufferDescriptorA = { deviceBufferA, 0, VK_WHOLE_SIZE };
-		VkDescriptorBufferInfo bufferDescriptorB = { deviceBufferB, 0, VK_WHOLE_SIZE };
 		VkDescriptorBufferInfo bufferDescriptorC = { deviceBufferC, 0, VK_WHOLE_SIZE };  // for output matrix
 
 		// std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets = {
@@ -399,8 +372,7 @@ public:
 
 		std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets = {
 			vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0, &bufferDescriptorA), // binding 0
-			vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, &bufferDescriptorB), // binding 1
-			vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2, &bufferDescriptorC), // binding 2
+			vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, &bufferDescriptorC), // binding 1
 		};
 		vkUpdateDescriptorSets(device, static_cast<uint32_t>(computeWriteDescriptorSets.size()), computeWriteDescriptorSets.data(), 0, NULL);
 
@@ -411,27 +383,27 @@ public:
 		// Create pipeline
 		VkComputePipelineCreateInfo computePipelineCreateInfo = vks::initializers::computePipelineCreateInfo(pipelineLayout, 0);
 
-		// compute tile size according to the size of N
-		TILE = (N >= 16) ? 16 : 1;
-		// Pass SSBO size via specialization constant
-		struct SpecializationData {
-			uint32_t MATRIX_SIZE;
-			uint32_t TILE;
-			uint32_t ldN;
-		};
+		// // compute tile size according to the size of N
+		// TILE = (N >= 16) ? 16 : 1;
+		// // Pass SSBO size via specialization constant
+		// struct SpecializationData {
+		// 	uint32_t MATRIX_SIZE;
+		// 	uint32_t TILE;
+		// 	uint32_t ldN;
+		// };
 		
-		SpecializationData specializationData = {
-			N,     // MATRIX_SIZE
-			TILE,   // TILE_Y
-			ldN
-		};
-		std::vector<VkSpecializationMapEntry> specializationMapEntries = {
-			{vks::initializers::specializationMapEntry(0, offsetof(SpecializationData, MATRIX_SIZE), sizeof(uint32_t))},
-			{vks::initializers::specializationMapEntry(1,offsetof(SpecializationData, TILE), sizeof(uint32_t))},
-			{vks::initializers::specializationMapEntry(2, offsetof(SpecializationData, ldN), sizeof(uint32_t))}
-		};
-			VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(
-			3, specializationMapEntries.data(), sizeof(SpecializationData), &specializationData);
+		// SpecializationData specializationData = {
+		// 	N,     // MATRIX_SIZE
+		// 	TILE,   // TILE_Y
+		// 	ldN
+		// };
+		// std::vector<VkSpecializationMapEntry> specializationMapEntries = {
+		// 	{vks::initializers::specializationMapEntry(0, offsetof(SpecializationData, MATRIX_SIZE), sizeof(uint32_t))},
+		// 	{vks::initializers::specializationMapEntry(1,offsetof(SpecializationData, TILE), sizeof(uint32_t))},
+		// 	{vks::initializers::specializationMapEntry(2, offsetof(SpecializationData, ldN), sizeof(uint32_t))}
+		// };
+		// 	VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(
+		// 	3, specializationMapEntries.data(), sizeof(SpecializationData), &specializationData);
 
 		std::string shaderDir = "glsl";
 		if (commandLineParser.isSet("shaders")) {
@@ -446,24 +418,14 @@ public:
 		shaderStage.module = vks::tools::loadShader((shadersPath + "matmul.comp.spv").c_str(), device);
 
 		shaderStage.pName = "main";
-		shaderStage.pSpecializationInfo = &specializationInfo;
 		shaderModule = shaderStage.module;
 
 		assert(shaderStage.module != VK_NULL_HANDLE);
 		computePipelineCreateInfo.stage = shaderStage;
 		VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &pipeline));
-
-		// // Create a command buffer for compute operations
-		// VkCommandBufferAllocateInfo cmdBufAllocateInfo =
-		// 	vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
-		// VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &commandBuffer));
-
-		// // Fence for compute CB sync
-		// VkFenceCreateInfo fenceCreateInfo = vks::initializers::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-		// VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
 	}
 
-	void submitComputeWork(const PushConstants& pc) {
+	void submitComputeWorkBenchmark(const PushConstants& pc) {
 		// Reset fence and command buffer for reuse
 		VK_CHECK_RESULT(vkResetFences(device, 1, &computeFence));
 		VK_CHECK_RESULT(vkResetCommandBuffer(computeCmdBuf, 0));
@@ -472,7 +434,6 @@ public:
 		VK_CHECK_RESULT(vkBeginCommandBuffer(computeCmdBuf, &cmdBufInfo));
 
 		vkCmdResetQueryPool(computeCmdBuf, queryPool, 0, 4);
-		vkCmdWriteTimestamp(computeCmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, queryPool, 0);
 
 		// Bind pipeline + descriptor set
 		vkCmdBindPipeline(computeCmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
@@ -483,17 +444,22 @@ public:
 		vkCmdPushConstants(computeCmdBuf, pipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT,
 						0, sizeof(PushConstants), &pc);
 
+		// ---- TIMED REGION (COMPUTE ONLY) ----
 		vkCmdWriteTimestamp(computeCmdBuf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, queryPool, 1);
-		vkCmdDispatch(computeCmdBuf, N / TILE, N / TILE, 1);
-		vkCmdWriteTimestamp(computeCmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, queryPool, 2);
+		// vkCmdDispatch(computeCmdBuf, N / TILE, N / TILE, 1);
+		uint32_t totalVec4 = (N * N) / 4;
+		uint32_t local = 256;
+		uint32_t groups = (totalVec4 + local - 1) / local; 
+		vkCmdDispatch(computeCmdBuf, groups, 1, 1);
+		vkCmdWriteTimestamp(computeCmdBuf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, queryPool, 2);
+		// -------------------------------------
 
 		// Copy result to host buffer
-		VkBufferCopy copyRegion = {};
-		copyRegion.size = bufferSize;
-		vkCmdCopyBuffer(computeCmdBuf, deviceBufferC, hostBufferC, 1, &copyRegion);
+		// VkBufferCopy copyRegion = {};
+		// copyRegion.size = bufferSize;
+		// vkCmdCopyBuffer(computeCmdBuf, deviceBufferC, hostBufferC, 1, &copyRegion);
 
 		// Final timestamp
-		vkCmdWriteTimestamp(computeCmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool, 3);
 
 		VK_CHECK_RESULT(vkEndCommandBuffer(computeCmdBuf));
 
@@ -504,56 +470,15 @@ public:
 		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, computeFence));
 		VK_CHECK_RESULT(vkWaitForFences(device, 1, &computeFence, VK_TRUE, UINT64_MAX));
 
-		// Copy from mapped to C matrix
-		void* mapped;
-		vkMapMemory(device, hostMemoryC, 0, VK_WHOLE_SIZE, 0, &mapped);
-		VkMappedMemoryRange mappedRange = vks::initializers::mappedMemoryRange();
-		mappedRange.memory = hostMemoryC;
-		mappedRange.offset = 0;
-		mappedRange.size = VK_WHOLE_SIZE;
-		vkInvalidateMappedMemoryRanges(device, 1, &mappedRange);
-
-		float* fdata = static_cast<float*>(mapped);
-
-		// LOG("\nmapped: ");
-        // for (int i = 0; i < 16; ++i) {
-        //  printf(": %f\t", fdata[i]);
-        // }
-        // LOG("\n--------------\nMatrix C before adding mapped: \n");
-        // for (int i = 0; i < 16; ++i) {
-        //  printf(": %f\t", outC[i]);
-        // }
-        // LOG("\n\n");
-
-		int tile_row = pc.offsetRowC / N;
-		int tile_col = pc.offsetColC / N;
-		int tile_index = tile_row * (ldN / N) + tile_col; // (N/TILE) is to find the number of tiles within our matrix 
-
-		pthread_mutex_lock(&C_locks[tile_index]);
-		for (int r = 0; r < N; ++r) {
-				for (int c = 0; c < N; ++c) {
-					int idx = (pc.offsetRowC + r) * ldN + (pc.offsetColC + c);
-					outC[idx] += fdata[idx];
-				}
-		}
-		pthread_mutex_unlock(&C_locks[tile_index]);
-
-
-		//TODO: you need to flush it to the GPU otherwise this is not going to be
-        // set to 0 when you only do memset.
-		// memset(mapped, 0, ldN * ldN * sizeof(float));
-		vkUnmapMemory(device, hostMemoryC);
-
 		queryTimestamps();
 	}
 
-
 	void printTotalExecutionTime() const {
 	std::cout << "\n===== Vulkan Timing Summary Across All Tiles =====\n";
-	std::cout << "Total Buffer Setup Time:        " << totalSetupTime     << " ns\n";
-	std::cout << "Total Compute Shader Time:      " << totalComputeTime   << " ns\n";
-	std::cout << "Total GPU->Host Transfer Time:  " << totalTransferTime  << " ns\n";
-	std::cout << "Total End-to-End GPU Time:      " << totalTime          << " ns\n";
+	// std::cout << "Total Buffer Setup Time:        " << totalSetupTime     << " ns\n"; 
+	std::cout << "Total Compute Shader Time:      " << computeTime   << " ns\n";
+	// std::cout << "Total GPU->Host Transfer Time:  " << totalTransferTime  << " ns\n";
+	// std::cout << "Total End-to-End GPU Time:      " << totalTime          << " ns\n";
 	std::cout << "==================================================\n";
 }
 
@@ -562,10 +487,6 @@ public:
 		vkFreeMemory(device, deviceMemoryA, nullptr);
 		vkDestroyBuffer(device, hostBufferA, nullptr);
 		vkFreeMemory(device, hostMemoryA, nullptr);
-        vkDestroyBuffer(device, deviceBufferB, nullptr);
-		vkFreeMemory(device, deviceMemoryB, nullptr);
-		vkDestroyBuffer(device, hostBufferB, nullptr);
-		vkFreeMemory(device, hostMemoryB, nullptr);
 	}
 
 	~VulkanExample()
@@ -594,7 +515,7 @@ public:
 
 static VulkanExample* vkInstance = nullptr;
 
-extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t N, pthread_mutex_t* locks) {
+extern "C" void vulkan_init(float* A, float* C, uint32_t ldN) {
     
 	if (vkInstance) {
 		delete vkInstance;
@@ -613,14 +534,14 @@ extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t
     vkInstance->createCommandAndQueryPool();       // Command pool and timestamp pool
 
 	//Create buffers and upload input matrices
-    vkInstance->generateMatrixBuffersAndCopyToDev(A, B, C, ldN, N, locks);
+    vkInstance->generateMatrixBuffersAndCopyToDev(A, C, ldN);
 
     //Create compute pipeline and descriptor sets
     vkInstance->createComputePipeline();
 	// LOG("Finished Initialisation\n");
 }
 
-extern "C" void vulkan_submit_tile(uint32_t offsetRowA, uint32_t offsetColA, uint32_t offsetRowB, uint32_t offsetColB, uint32_t offsetRowC, uint32_t offsetColC){
+extern "C" uint64_t vulkan_submit_tile(uint32_t M, uint32_t N, uint mode){
 	if (!vkInstance) {
 		std::cerr << "Error: Vulkan has not been initialized!" << std::endl;
 	}
@@ -628,15 +549,18 @@ extern "C" void vulkan_submit_tile(uint32_t offsetRowA, uint32_t offsetColA, uin
 	// LOG("Submitting task to Compute Pipeline\n");
 
 	PushConstants pc = {
-        offsetRowA,
-		offsetColA,
-		offsetRowB,
-		offsetColB,
-        offsetRowC,
-		offsetColC
+		M,  // rows
+		N,  // cols
+		mode// 0: one slot, 1: per-WG
     };
+
 	// printf("\nSubmitting tile A(%d,%d) B(%d,%d) C(%d,%d)\n", pc.offsetRowA, pc.offsetColA, pc.offsetRowB, pc.offsetColB, pc.offsetRowC, pc.offsetColC);
-	vkInstance->submitComputeWork(pc);
+	vkInstance->submitComputeWorkBenchmark(pc);
+	// printf("total compute time: %f\n", vkInstance->totalComputeTime); 
+	vkInstance->printTotalExecutionTime();
+	std::cout << "Total Compute Shader Time:      " << vkInstance->totalComputeTime   << " ns\n";
+	std::cout << "Individual Compute Shader Time:      " << vkInstance->computeTime   << " ns\n";
+	return vkInstance->computeTime;
 }
 
 extern "C" void vulkan_cleanup() {

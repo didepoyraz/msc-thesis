@@ -2,7 +2,7 @@
 cd vulkan/build/bin
 # List of (MATRIX_SIZE, BLOCK_SIZE) pairs
 pairs=(
-  "16 8"
+  # "16 8"
   "32 16"
   "64 16"
   "128 16"

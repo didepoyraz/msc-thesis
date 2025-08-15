@@ -246,6 +246,14 @@ public:
 		std::generate(Input_MatrixA, Input_MatrixA + count, [&n] { return n++; });
         std::generate(Input_MatrixB, Input_MatrixB + count, [&n] { return n++; });
 
+		for (size_t i = 0; i < N; ++i) {
+            for (size_t j = i + 1; j < N; ++j) {
+                float temp = Input_MatrixB[i * N + j];
+                Input_MatrixB[i * N + j] = Input_MatrixB[j * N + i];
+                Input_MatrixB[j * N + i] = temp;
+            }
+        }
+
 		// uint32_t n = 0;
 		// std::generate(Input_MatrixA.begin(), Input_MatrixA.end(), [&n] { return n++; });
         // std::generate(Input_MatrixB.begin(), Input_MatrixB.end(), [&n] { return n++; });
@@ -627,9 +635,9 @@ public:
 		// 	LOG("%f \t", Input_MatrixB[i]);
 		// }
 		// LOG("\n");
-		LOG("Resulting matrix first element: %f\t", Output_Matrix[0] );
+		// LOG("Resulting matrix first element: %f\t", Output_Matrix[0] );
 		// LOG("Output matrix:\n");
-		// for (int i = 0; i < N; ++i) {
+		// for (int i = 0; i < N*N; ++i) {
 		// 	LOG("%f \t", Output_Matrix[i]);
 		// }
 

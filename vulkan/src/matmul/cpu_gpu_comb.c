@@ -18,7 +18,7 @@
 #define offsetA(i, p, ldN) (i * ldN + p)
 #define offsetB(p, j, ldN) (p * ldN + j)
 #define offsetC(i, j, ldN) (i * ldN + j)
-#define NUM_THREADS 4
+#define NUM_THREADS 3
 
 void* cpu_worker(void* arg){
     TileQueue* q = (TileQueue*) arg;

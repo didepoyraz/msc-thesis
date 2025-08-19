@@ -51,15 +51,15 @@ void* cpu_worker(void* arg){
 }
 
 void* gpu_worker(void* arg){
-    TileQueue* q = (TileQueue*) arg;
-    TileConfig tile;
-    DEBUG_PRINT("\nGPU thread starting up!");
-    // TODO: add a lock to each output element of C
-    while(dequeue_tile(q, &tile)) {
-        DEBUG_PRINT("\n++++ GPU is submitting tile: A(%i, %i), B(%i, %i), C(%i, %i) ++++\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-        vulkan_submit_tile(tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
-        gpu_counter++;
-    }
+    // TileQueue* q = (TileQueue*) arg;
+    // TileConfig tile;
+    // DEBUG_PRINT("\nGPU thread starting up!");
+    // // TODO: add a lock to each output element of C
+    // while(dequeue_tile(q, &tile)) {
+    //     DEBUG_PRINT("\n++++ GPU is submitting tile: A(%i, %i), B(%i, %i), C(%i, %i) ++++\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
+    //     vulkan_submit_tile(tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
+    //     gpu_counter++;
+    // }
     return NULL;
 }
 

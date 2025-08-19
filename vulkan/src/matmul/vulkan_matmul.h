@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 
-void vulkan_init(float* A, float* B, float* C, unsigned int ldN, unsigned int N, pthread_mutex_t* locks);
+void vulkan_init();
 void vulkan_submit_tile(uint32_t offsetRowA, uint32_t offsetColA, uint32_t offsetRowB, uint32_t offsetColB, uint32_t offsetRowC, uint32_t offsetColC);
 void vulkan_cleanup();
 void vulkan_print_total_time();

@@ -51,12 +51,6 @@ void main() {
     // Loop over tiles horizontally and k increases by TILE_SIZE so that each thread only accesses it's own relative position within different tiles
     for (uint k = 0; k < MATRIX_SIZE; k += TILE_SIZE) {
 
-        // Each thread loads one element into the tile from A and B per iteration and MATRIX_SIZE/TILE_SIZE 
-        // positions per tileA and tileB in total
-        // tileA gets the row-wise elements from dataA and tileB gets the column-wise elements. For a thread, loop iterations
-        // will have it shifted to different row positions of the partial dot product of the dataA (according to tiles) for 
-        // tileA and different column positions of the partial dot product for dataB for tileB
-        //---------------------------------------------------------------------------------------------------------------------//
         // For a given tile (k-th tile in the inner dimension),
          // each thread loads:
          // - One value from A: in the same row, shifting across columns (k + localCol)

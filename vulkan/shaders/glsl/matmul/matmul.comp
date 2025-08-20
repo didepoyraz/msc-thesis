@@ -12,14 +12,10 @@ layout(binding = 2) buffer MatrixC {
    float output_dataC[];
 };
 
-//layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout (local_size_x_id = 1, local_size_y = 1, local_size_z = 1) in;
 
 layout (constant_id = 0) const uint MATRIX_SIZE = 1024;
 layout (constant_id = 2) const uint BLOCKSIZE = 16; 
-
-// shared float tileA[TILE_SIZE][TILE_SIZE];
-// shared float tileB[TILE_SIZE][TILE_SIZE];
 
 void main() {
     // global position in the matrix

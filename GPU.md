@@ -78,3 +78,8 @@ source exp/bin/activate
 pip install numpy matplotlib
 python relationship.py
 ```
+
+### metric gathering
+```bash
+python3 metric_gathering.py
+```

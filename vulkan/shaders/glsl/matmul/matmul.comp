@@ -12,7 +12,6 @@ layout(binding = 2) buffer MatrixC {
    float output_dataC[];
 };
 
-//layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout (local_size_x_id = 3, local_size_y_id = 3, local_size_z = 1) in; // each thread will calculate a 2x2 output
 
 layout (constant_id = 0) const uint MATRIX_SIZE = 1024;
@@ -26,8 +25,8 @@ void main() {
 
    // uvec2 gid = gl_GlobalInvocationID.xy;
    // float resul
-   //  // each thread handles a TILE / RESULTS_PER_THREAD tile
-   //  // compute the starting cell for this tile
+    // each thread handles a TILE / RESULTS_PER_THREAD tile
+    // compute the starting cell for this tile
    // uint base_x = gid.x* RESULTS_PER_THREAD;
    // uint base_y = gid.y*RESULTS_PER_THREAD;
 
@@ -66,7 +65,7 @@ void main() {
       // Synchronize all threads in the workgroup for the tile to be completed
       barrier();
 
-      // // loop over the thread tile
+      // loop over the thread tile
       for (uint t = 0; t < TILE_SIZE; t++) {
          for (uint i = 0; i < RESULTS_PER_THREAD; ++i) {
             for (uint j = 0; j < RESULTS_PER_THREAD; ++j) {

@@ -219,7 +219,6 @@ public:
 		queryPoolCreateInfo.queryCount = 4;
 		queryPoolCreateInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
 		VK_CHECK_RESULT(vkCreateQueryPool(device, &queryPoolCreateInfo, nullptr, &queryPool));
-
 	
 		inA = inputA;
 		inB = inputB;
@@ -231,10 +230,6 @@ public:
 		bufferSize = ldN * ldN * sizeof(float);
 		size_t count = ldN * ldN;
 		size_t bytes = count * sizeof(float);
-		// matrix A
-		// std::vector<float> Input_MatrixA(inA, inA + ldN * ldN);
-		// matrix B
-		// std::vector<float> Input_MatrixB(inB, inB + ldN * ldN);
 
 		float* Input_MatrixA = static_cast<float*>(std::aligned_alloc(16, bytes));
 		float* Input_MatrixB = static_cast<float*>(std::aligned_alloc(16, bytes));
@@ -242,12 +237,6 @@ public:
 		assert(reinterpret_cast<uintptr_t>(Input_MatrixA) % 16 == 0);
 		assert(reinterpret_cast<uintptr_t>(Input_MatrixB) % 16 == 0);
 
-
-		// float* A_data = static_cast<float*>(std::aligned_alloc(16, ldN *  ldN * sizeof(float)));
-		// float* B_data = static_cast<float*>(std::aligned_alloc(16, ldN *  ldN* sizeof(float)));
-		// float* C_data = static_cast<float*>(std::aligned_alloc(16, matrix_size * matrix_size * sizeof(float)));
-
-		
 		std::memcpy(Input_MatrixA, inA, bytes);
 		std::memcpy(Input_MatrixB, inB, bytes);
 		// Copy input data to GPU mem using staging buffer 
@@ -316,7 +305,7 @@ public:
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 			&deviceBufferC, &deviceMemoryC, bufferSize);
 		
-						// Copy to staging buffer
+		// Copy to staging buffer
 		VkCommandBufferAllocateInfo cmdBufAllocateInfo = vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
 		VkCommandBuffer copyCmd;
 		VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &copyCmd));
@@ -385,10 +374,6 @@ public:
 		VkDescriptorBufferInfo bufferDescriptorB = { deviceBufferB, 0, VK_WHOLE_SIZE };
 		VkDescriptorBufferInfo bufferDescriptorC = { deviceBufferC, 0, VK_WHOLE_SIZE };  // for output matrix
 
-		// std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets = {
-		// 	vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0, &bufferDescriptor),
-		// };
-
 		std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets = {
 			vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0, &bufferDescriptorA), // binding 0
 			vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, &bufferDescriptorB), // binding 1
@@ -444,15 +429,6 @@ public:
 		assert(shaderStage.module != VK_NULL_HANDLE);
 		computePipelineCreateInfo.stage = shaderStage;
 		VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &pipeline));
-
-		// // Create a command buffer for compute operations
-		// VkCommandBufferAllocateInfo cmdBufAllocateInfo =
-		// 	vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
-		// VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &commandBuffer));
-
-		// // Fence for compute CB sync
-		// VkFenceCreateInfo fenceCreateInfo = vks::initializers::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-		// VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
 	}
 
 	void submitComputeWork(const PushConstants& pc) {
@@ -511,15 +487,6 @@ public:
 		vkInvalidateMappedMemoryRanges(device, 1, &mappedRange);
 		float* fdata = static_cast<float*>(mapped);
 
-		// LOG("\nmapped: ");
-		// for (int i = 0; i < 16; ++i) {
-		// 	printf(": %f\t", fdata[i]);
-		// }
-		// LOG("\n--------------\nMatrix C before adding mapped: \n");
-		// for (int i = 0; i < 16; ++i) {
-		// 	printf(": %f\t", outC[i]);
-		// }
-		// LOG("\n\n");
 		int tile_row = pc.offsetRowC / N;
 		int tile_col = pc.offsetColC / N;
 		int tile_index = tile_row * (ldN / N) + tile_col; // (ldN/N) is to find the number of blocks
@@ -533,8 +500,6 @@ public:
 		}
 		pthread_mutex_unlock(&C_locks[tile_index]);
 
-		//TODO: you need to flush it to the GPU otherwise this is not going to be
-		// set to 0 when you only do memset.
 		memset(mapped, 0, ldN * ldN * sizeof(float));
 
 		vkUnmapMemory(device, hostMemoryC);
@@ -595,26 +560,9 @@ extern "C" void vulkan_init(float* A, float* B, float* C, uint32_t ldN, uint32_t
 	if (vkInstance) {
 		delete vkInstance;
 	}
-
-	// LOG("Initialising Vulkan\n");
-	// LOG("First row of matrix A:\n");
-	// for (int i = 0; i < 4; ++i) {
-	// 	LOG("%f \t", B[i]);
-	// }
-
 	vkInstance = new VulkanExample();
 	
 	vkInstance->vkInit(A, B, C, ldN, N, locks);                          // Vulkan instance
-    // vkInstance->pickPhysicalDevAndQueue();         // Pick GPU and queue family
-    // vkInstance->createLogicalDevAndQueue();        // Create logical device and queue
-    // vkInstance->createCommandAndQueryPool();       // Command pool and timestamp pool
-
-	// //Create buffers and upload input matrices
-    // vkInstance->generateMatrixBuffersAndCopyToDev(A, B, C, ldN, N);
-
-    // //Create compute pipeline and descriptor sets
-    // vkInstance->createComputePipeline();
-	// LOG("Finished Initialisation\n");
 }
 
 extern "C" void vulkan_submit_tile(uint32_t offsetRowA, uint32_t offsetColA, uint32_t offsetRowB, uint32_t offsetColB, uint32_t offsetRowC, uint32_t offsetColC){

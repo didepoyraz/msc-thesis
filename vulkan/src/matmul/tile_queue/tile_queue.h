@@ -4,7 +4,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 
-#define TILE_QUEUE_CAPACITY 4096 // TODO: put all constants into their own file
+#define TILE_QUEUE_CAPACITY 4096 
  
 typedef struct {
     int i;

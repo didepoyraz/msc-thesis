@@ -16,7 +16,6 @@ bool enqueue_tile(TileQueue* q, TileConfig tile){
     pthread_mutex_lock(&q->lock);
 
     while(q->size == TILE_QUEUE_CAPACITY && !q->done){
-        // TODO: I made this but i was tired I didn't thoroughly think about race conditions please look at it again
         pthread_cond_wait(&q->capacity_available, &q->lock);
         DEBUG_PRINT("\nQueue size is at maximum capacity!");
     }

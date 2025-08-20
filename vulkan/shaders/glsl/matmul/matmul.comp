@@ -21,7 +21,6 @@ layout(push_constant) uniform PushConstants {
     uint offsetColC;
 } pc;
 
-//layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout (local_size_x_id = 1, local_size_y_id = 1, local_size_z = 1) in;
 
 layout (constant_id = 0) const uint MATRIX_SIZE = 1024;
@@ -54,12 +53,6 @@ void main() {
     // Loop over tiles horizontally and k increases by TILE_SIZE so that each thread only accesses it's own relative position within different tiles
     for (uint k = 0; k < MATRIX_SIZE; k += TILE_SIZE) {
 
-        // Each thread loads one element into the tile from A and B per iteration and MATRIX_SIZE/TILE_SIZE 
-        // positions per tileA and tileB in total
-        // tileA gets the row-wise elements from dataA and tileB gets the column-wise elements. For a thread, loop iterations
-        // will have it shifted to different row positions of the partial dot product of the dataA (according to tiles) for 
-        // tileA and different column positions of the partial dot product for dataB for tileB
-        //---------------------------------------------------------------------------------------------------------------------//
         // For a given tile (k-th tile in the inner dimension),
          // each thread loads:
          // - One value from A: in the same row, shifting across columns (k + localCol)
@@ -68,12 +61,8 @@ void main() {
          // tileA stores a horizontal slice (row-major) of A
          // tileB stores a vertical slice (column-major) of B
 
-        // tileA[localRow][localCol] = dataA[row * leadingDimensionN + (pc.offsetColA + k + localCol)];  
-        // tileB[localRow][localCol] = dataB[(pc.offsetRowB + k + localRow) * leadingDimensionN + col];
-
         if ((localCol % 4) == 0) {
             // Load 4 floats from A row-wise
-            // result += 123;
             tileA[localRow][vec4Col] = vec4(
                 dataA[row * leadingDimensionN + (pc.offsetColA + k + localCol + 0)],
                 dataA[row * leadingDimensionN + (pc.offsetColA + k + localCol + 1)],
@@ -83,7 +72,6 @@ void main() {
         }
 
         if ((localRow % 4) == 0) {
-            // result += 2;
             tileB[vec4Row][localCol] = vec4(
                 dataB[(pc.offsetRowB + k + localRow + 0) * leadingDimensionN + col],
                 dataB[(pc.offsetRowB + k + localRow + 1) * leadingDimensionN + col],
@@ -95,13 +83,7 @@ void main() {
         // Synchronize all threads in the workgroup for the tile to be completed
         barrier();
 
-        // Compute partial dot product for this tile
-        // for (uint t = 0; t < TILE_SIZE; t++) {
-        //     result += tileA[localRow][t] * tileB[t][localCol];
-        // }
-
         for (uint t = 0; t < TILE_SIZE / 4; t++) {
-        // result += dot(tileA[...], tileB[...])
             vec4 a = tileA[localRow][t];     
             vec4 b = tileB[t][localCol];  
             result += dot(a, b);

@@ -55,26 +55,10 @@ python compileshaders.py --glslang /usr/bin/glslangValidator
 
 ### run
 ```bash
-./matmul N TILE
+./cpu_gpu_comb N MACRO-TILE-SIZE
 ```
-- **N**: matrix size
-- **TILE**: tile size
 
-- **Results (ms):** <br>
-  - TILE = 16 <br>
-N = [16    32    64   128   256  512    1024]<br>
-T = [0.04  0.08  0.42  3  22.6  180  1443]
-
-  - TILE = 128 <br>
-N = [16    32    64   ]<br>
-T = [0.0009  0.0009  0.0009]<br>
-N = [128   256  512  1024 ]<br>
-T = [1.44  11  86.9  742.8]
-
-
+### metric gathering
 ```bash
-python3 -m venv exp
-source exp/bin/activate
-pip install numpy matplotlib
-python relationship.py
+python3 metric_gathering.py
 ```

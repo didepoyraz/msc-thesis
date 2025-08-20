@@ -138,7 +138,6 @@ int main(int argc, char* argv[]) {
         for (int j = 0; j < N; j += BLOCK_SIZE) {
             for (int k = 0; k < N; k += BLOCK_SIZE) {
                 TileConfig tile = {i, j, k};
-                // DEBUG_PRINT("\n\n-----submitting tile: (%d, %d, %d)-------\n", tile.i, tile.j, tile.p);
                 DEBUG_PRINT("\n======= submitting tile: A(%i, %i), B(%i, %i), C(%i, %i) =======\n", tile.i, tile.p, tile.p, tile.j, tile.i, tile.j);
                     enqueue_tile(&queue, tile);
             }
@@ -149,7 +148,6 @@ int main(int argc, char* argv[]) {
     queue.done = true;
     pthread_cond_broadcast(&queue.not_empty);
     pthread_mutex_unlock(&queue.lock);
-    // DEBUG_PRINT("BLIS default threads: %d\n", bli_thread_get_num_threads());
 
     for (int i = 0; i < NUM_THREADS; i++){
         pthread_join(threads[i], NULL);
@@ -158,20 +156,16 @@ int main(int argc, char* argv[]) {
     clock_gettime(CLOCK_MONOTONIC, &end);
 
     elapsed_compute = (end.tv_sec - start.tv_sec) * 1000000000LL + (end.tv_nsec - start.tv_nsec);
-    // elapsed_e2e = (toc.tv_sec - tic.tv_sec) * 1000000000LL + (toc.tv_nsec - tic.tv_nsec);
-
-    // printf("Vulkan Setup Time: %f ns \n", elapsed_e2e);
+    
     printf("%f", elapsed_compute); 
-    // printf("Total Execution Time: %f ns \n", (elapsed_compute + elapsed_e2e));
 
+    //================ De-comment these to print execution times:
+    // printf("Total Execution Time: %f ns \n", (elapsed_compute));
     // printf("GPU has completed %i tiles and the CPU has completed %i tiles.\n", gpu_counter, cpu_counter);
-
-
-    // // printf("Resulting Matrix: \n");
-    // // print_first_row_matrix_float(C, N);
-    // printf("matrix c first element %f, last element %f", C[0], C[(N*N)-1]);
     // vulkan_print_total_time();
+    //================
 
+    //================De-comment these to save the output matrices to csv files:
     // char filename[128];
     // char* s = "/home/pi/Desktop/msc-thesis/vulkan/results/output_matrix";
     // snprintf(filename, sizeof(filename), "%s_%d_%d.csv ", s, N, BLOCK_SIZE);
@@ -188,6 +182,8 @@ int main(int argc, char* argv[]) {
     // char* s_compute = "/home/pi/Desktop/msc-thesis/vulkan/results/compute_time";
 
     // save_value_to_file(s_compute, elapsed_full_execution);
+    //================
+
 
     // free everything
     for (int t = 0; t < num_tiles; t++) {

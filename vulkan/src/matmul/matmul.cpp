@@ -677,9 +677,6 @@ int main(int argc, char* argv[]) {
 
 	std::cout << "Using N = " << N << std::endl;
 
-	// commandLineParser.add("shaders", { "-s", "--shaders" }, 1, "Select shader type to use (glsl or hlsl)");
-	// commandLineParser.parse(argc, argv);
-
 	int threadsPerGroup = TILE*TILE; //current thread group's local size is x=y=1
 	int totalThreads = (N * N);
 	int totalThreadGroups = totalThreads / threadsPerGroup;

@@ -71,10 +71,14 @@ T = [0.0009  0.0009  0.0009]<br>
 N = [128   256  512  1024 ]<br>
 T = [1.44  11  86.9  742.8]
 
-
 ```bash
 python3 -m venv exp
 source exp/bin/activate
 pip install numpy matplotlib
 python relationship.py
+```
+
+### metric gathering
+```bash
+python3 metric_gathering.py
 ```

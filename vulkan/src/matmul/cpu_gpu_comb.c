@@ -14,7 +14,7 @@
 #define offsetB(p, j) (p * ldN + j)
 #define offsetC(i, j) (i * ldN + j)
 
-void blis_matmul(double* A, double* B, double* C, uint32_t N, uint32_t TILE){
+void blis_matmul(float* A, float* B, float* C, uint32_t N){
     bli_init();
 
     if (!A || !B || !C) {
@@ -27,9 +27,9 @@ void blis_matmul(double* A, double* B, double* C, uint32_t N, uint32_t TILE){
     uint32_t M = N;
     uint32_t K = N;
 
-	bli_obj_create_with_attached_buffer(BLIS_DOUBLE, M, K, A, 1, K, &A_blis);
-	bli_obj_create_with_attached_buffer(BLIS_DOUBLE, K, N, B, 1, N, &B_blis);
-	bli_obj_create_with_attached_buffer(BLIS_DOUBLE, M, N, C, 1, N, &C_blis);
+	bli_obj_create_with_attached_buffer(BLIS_FLOAT, M, K, A, K, 1, &A_blis);
+	bli_obj_create_with_attached_buffer(BLIS_FLOAT, K, N, B, N, 1, &B_blis);
+	bli_obj_create_with_attached_buffer(BLIS_FLOAT, M, N, C, N, 1, &C_blis);
 
 	
     bli_gemm(&BLIS_ONE, &A_blis, &B_blis, &BLIS_ZERO, &C_blis);
@@ -41,78 +41,44 @@ int main(int argc, char* argv[]) {
     int M = 1024;
     int N = 1024;
     int K = 1024;
-    int BLOCK_SIZE = 512;
     int GPU_TILE_SIZE = 16;
    
     if (argc > 2) {
         M = atoi(argv[1]);
         N = atoi(argv[1]);
         K = atoi(argv[1]);
-        
-        BLOCK_SIZE = atoi(argv[2]);
     }
-    // int ldN = N;
-    
-    // initialise the gpu float vectors
+
+    // initialise the float vectors
     float* A = malloc(N * N * sizeof(float));
     float* B = malloc(N * N * sizeof(float));
     float* C = malloc(N * N * sizeof(float));
 
-    // initialise the blis double vectors
-    double* A_b = (double*)malloc(N * N * sizeof(double));
-	double* B_b = (double*)malloc(N * N * sizeof(double));
-	double* C_b = (double*)calloc(N * N,  sizeof(double));
-
     // fill the vectors 
     for (int i = 0; i < N * N; i++) {
-        A[i] = (float)i+1;
-        B[i] = (float)i+1;
-        A_b[i] = (double)i+1;
-        B_b[i] = (double)i+1;    
+        A[i] = (float)i;
+        B[i] = (float)i+(N*N);
     }
+
+    // print_matrix_float(A, N);
+    // printf("----------------------\n\n");
+    // print_matrix_float(B, N);
 
     struct timespec tic, toc;
     double elapsed;
-
+    // bli_thread_set_num_threads(3);
     printf("Calling BLIS GEMM with N = %d\n----------------\n", N);
 
     clock_gettime(CLOCK_MONOTONIC, &tic);
-    blis_matmul(A_b, B_b, C_b, N, BLOCK_SIZE);
+    blis_matmul(A, B, C, N);
     clock_gettime(CLOCK_MONOTONIC, &toc);
 
     elapsed = (toc.tv_sec - tic.tv_sec) * 1000000000LL + (toc.tv_nsec - tic.tv_nsec);
     // printf("Resulting Matrix: \n");
-    // print_matrix_double(C_b, N);
+    // print_matrix_float(C, N);
     printf("BLIS GEMM Computation Time: %f ns\n----------------\n", elapsed);
 
-    // print_matrix_float(A, N);
-    // print_matrix_float(B, N);
-
-    vulkan_init(A, B, C, N, BLOCK_SIZE);
-    // vulkan_submit_tile(0, 0, 0);
-    // vulkan_submit_tile(offsetA(0,2), offsetB(0, 2), offsetC(0, 2));
-
-    for (int i = 0; i < M; i += BLOCK_SIZE) {
-        for (int j = 0; j < N; j +=  BLOCK_SIZE) {
-            for (int p = 0; p < K; p +=  BLOCK_SIZE) {
-                // printf("\nith: %i, jth: %i, pth: %i loop\n", i , j, p);
-                // TODO add the offsets as input to the vulkan multiplication
-                // printf("A offset: (%i, %i), B offset: (%i, %i), C offset (%i, %i\n)", i, p, p, j, i, j);
-            //    printf("A offset: %i, B offset: %i, C offset %i\n",offsetA(i, p), offsetB(p, j), offsetC(i, j));
-                vulkan_submit_tile(i, p, p, j, i, j);
-               
-            }
-        }
-    }
-
-    // printf("\noutput matrix after vulkan: \n");
-    // print_first_row_matrix_float(C, N);
-
-    vulkan_print_total_time();
     // free everything
     free(A); free(B); free(C);
-    free(A_b); free(B_b); free(C_b); 
-    vulkan_cleanup();
-    
     return 0;
 }

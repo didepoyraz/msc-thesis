@@ -17,7 +17,7 @@ layout(push_constant) uniform PC {
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
 void main() {
-    const uint totalElems = pc.M * pc.N;          // float elements
+    const uint totalElems = pc.M * pc.N;         
     const uint totalVec4  = totalElems / 4u;      
     const uint threads    = gl_WorkGroupSize.x * gl_NumWorkGroups.x;
     const uint tid        = gl_GlobalInvocationID.x;

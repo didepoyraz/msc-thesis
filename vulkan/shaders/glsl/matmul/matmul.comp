@@ -5,7 +5,7 @@ layout(set = 0, binding = 0, std430) readonly buffer MatrixA4 {
 };
 
 layout(set = 0, binding = 1, std430) writeonly buffer Sink {
-    uint sink[];
+    uint dataC4[];
 };
 
 layout(push_constant) uniform PC {
@@ -26,18 +26,15 @@ void main() {
 
     uvec4 acc4 = uvec4(0);
 
-    // repeat over K iterations to increase runtime and make it more consistent
+    // repeating over K iterations to increase runtime and make it more consistent
     for (uint rep = 0u; rep < K; ++rep) {
         for (uint i = tid; i < totalVec4; i += threads) {
-            // 16-byte global load
+            // 16-byte vectorised load
             uvec4 v = dataA4[i];
             acc4 ^= (v + uvec4(0x9e3779b9u + rep));
         }
     }
 
    uint acc = acc4.x ^ acc4.y ^ acc4.z ^ acc4.w;
-   // if (gl_LocalInvocationID.x == 0u) {
-   //    sink[gl_WorkGroupID.x] = acc;
-   // }
-   sink[tid] = acc;
+   dataC4[tid] = acc;
 }

@@ -25,7 +25,6 @@ int main(int argc, char* argv[]) {
     int M = 8192;
     int N = 8192;
     int K = 8192;
-    int mode = 0;
 
     int num_iter;
     int num_warmups = 5;
@@ -54,40 +53,27 @@ int main(int argc, char* argv[]) {
 
     // warm up runs
     for(int i = 0; i <num_warmups; i ++){
-        vulkan_submit_tile(M, N,mode);
+        vulkan_submit_tile(M, N);
     }
 
     for(int i = 0; i <num_iter; i ++){
-        total_compute_time += vulkan_submit_tile(M, N,mode);
+        total_compute_time += vulkan_submit_tile(M, N);
     }
 
     vulkan_print_total_time();
     printf("total compute time of runs: %f\n", total_compute_time);
-    // printf("%f", elapsed_compute);
-    
-    // //----------------Calculate Bandwidth
-    // double average_compute_time_s = (total_compute_time / num_iter) / 1000000000;
-    // float bytes_read = M * N * 4;
-    // float mean_bandwidth_gbs = (bytes_read / average_compute_time_s) / 1000000000;
-    // double gibs = mean_bandwidth_gbs / (1024.0*1024.0*1024.0);
 
-    // printf("Mean Bandwidth: %f, and %f\n", mean_bandwidth_gbs, gibs);
-    const double ns_per_tick = 1.0; // Pi reports 1 ns/tick
+    const double ns_per_tick = 1.0;
 
-    // totals you already accumulated in TICKS:
-    uint64_t total_compute_ticks = total_compute_time ;   // across K runs
+    uint64_t total_compute_ticks = total_compute_time ;   
     int L = num_iter;
 
-    // 1) mean time per run (seconds)
- 
-    double avg_compute_time   = (total_compute_time / num_iter) / 1000000000;
+    double avg_compute_time   = (total_compute_time / num_iter) / 1000000000; //seconds
 
-    // 2) bytes read once (use 64-bit or double!)
     double bytes = (double) M * (double) N * 4.0 * 64;
     double gb = bytes / 1e9;
 
-    // 3) bandwidths
-    double bandwidth_gbs  = gb / avg_compute_time;               // bytes/second
+    double bandwidth_gbs  = gb / avg_compute_time;               // gbs/second
     double bandwidth_Bps  = bytes / avg_compute_time;               // bytes/second
  
     double bandwidth_GBs  = bandwidth_Bps / 1e9;                      // decimal GB/s

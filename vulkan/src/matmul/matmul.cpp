@@ -22,7 +22,6 @@ CommandLineParser commandLineParser;
 struct PushConstants {
     uint32_t M;       // rows
     uint32_t N;       // cols
-    uint mode;// 0: one slot, 1: per-WG
 };
 
 class VulkanExample
@@ -541,7 +540,7 @@ extern "C" void vulkan_init(float* A, float* C, uint32_t ldN) {
 	// LOG("Finished Initialisation\n");
 }
 
-extern "C" uint64_t vulkan_submit_tile(uint32_t M, uint32_t N, uint mode){
+extern "C" uint64_t vulkan_submit_tile(uint32_t M, uint32_t N){
 	if (!vkInstance) {
 		std::cerr << "Error: Vulkan has not been initialized!" << std::endl;
 	}
@@ -550,8 +549,7 @@ extern "C" uint64_t vulkan_submit_tile(uint32_t M, uint32_t N, uint mode){
 
 	PushConstants pc = {
 		M,  // rows
-		N,  // cols
-		mode// 0: one slot, 1: per-WG
+		N  // cols
     };
 
 	// printf("\nSubmitting tile A(%d,%d) B(%d,%d) C(%d,%d)\n", pc.offsetRowA, pc.offsetColA, pc.offsetRowB, pc.offsetColB, pc.offsetRowC, pc.offsetColC);

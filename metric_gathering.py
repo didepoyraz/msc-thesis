@@ -20,7 +20,6 @@ N_RUNS = 30   # Number of runs per configuration
 WARMUP_RUNS = 5  # Warm-up iterations 
 
 def run_command(size, tile):
-    """Run matrix multiplication program once and return compute time in nanoseconds."""
 
     result = subprocess.run(
     ["./vulkan/build/bin/matmul", str(size), str(tile)],
@@ -29,11 +28,9 @@ def run_command(size, tile):
     stderr=subprocess.PIPE,
     text=True
     )
-    
     return float(result.stdout.strip())
 
 def mean_ci(data, confidence=0.95):
-    """Return mean and half-width of the 95% confidence interval."""
     mean_val = statistics.mean(data)
     stdev = statistics.stdev(data)
     n = len(data)
@@ -76,7 +73,7 @@ for cfg in configs:
         "gflops": gflops
     })
 
-# Save results to CSV
+
 with open("matmul_results.csv", "w", newline="") as f:
     writer = csv.DictWriter(f, fieldnames=results[0].keys())
     writer.writeheader()

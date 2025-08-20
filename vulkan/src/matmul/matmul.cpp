@@ -44,7 +44,6 @@ public:
 	VkQueryPool queryPool;
 	// VkQueryPool queryPool_mem;
 
-
 	/*
 		get timestamps from the query pool
 	*/
@@ -566,19 +565,17 @@ public:
 		queryTimestamps();
 
 	   // Output buffer contents
-		int cols = 1024;  
-
 		// LOG("First row of matrix A:\n");
-		// for (int i = 0; i < cols; ++i) {
+		// for (int i = 0; i < N*N; ++i) {
 		// 	LOG("%f \t", Input_MatrixA[i]);
 		// }
 		// LOG("First row of matrix B:\n");
-		// for (int i = 0; i < cols; ++i) {
+		// for (int i = 0; i < N*N; ++i) {
 		// 	LOG("%f \t", Input_MatrixB[i]);
 		// }
 		// LOG("%f \t", Output_Matrix[0]);
 		// LOG("First row of output matrix:\n");
-		// for (int i = 0; i < cols; ++i) {
+		// for (int i = 0; i < N*N; ++i) {
 		// 	LOG("%f \t", Output_Matrix[i]);
 		// }
 

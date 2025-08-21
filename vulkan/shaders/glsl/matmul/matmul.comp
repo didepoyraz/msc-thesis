@@ -56,17 +56,14 @@ void main() {
             }
         }
 
-        // Synchronise threads within the workgroup
         barrier();
 
-        // Perform multiplication on this tile
         for (uint k = 0; k < TS; k++) {
             for (int w = 0; w < WPT; w++) {
                 acc[w] += Asub[row][k] * Bsub[k][col + w * RTS];
             }
         }
 
-        // Wait before loading next tile
         barrier();
     }
 

@@ -632,9 +632,10 @@ int main(int argc, char* argv[]) {
 	if (argc > 2) {
         N = std::atoi(argv[1]);
 		TILE = std::atoi(argv[2]);
+		RESULTS_PER_THREAD = std::atoi(argv[3]);
     }
 
-	std::cout << "Using N = " << N << std::endl;
+	// std::cout << "Using N = " << N << std::endl;
 
 	// commandLineParser.add("shaders", { "-s", "--shaders" }, 1, "Select shader type to use (glsl or hlsl)");
 	// commandLineParser.parse(argc, argv);
@@ -645,8 +646,8 @@ int main(int argc, char* argv[]) {
 	// std::cout << "Threads per group is " << threadsPerGroup << "; Total thread groups " << totalThreadGroups << "; Total threads is " << totalThreads << std::endl;
 
 	VulkanExample *vulkanExample = new VulkanExample();
-	std::cout << "Finished. Press enter to terminate...";
-	std::cin.get();
+	// std::cout << "Finished. Press enter to terminate...";
+	// std::cin.get();
 	delete(vulkanExample);
 	return 0;
 }
